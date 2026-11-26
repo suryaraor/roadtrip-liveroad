@@ -17,7 +17,8 @@ const PLACES_SHEET = 'Places';
 // Interests: what the guide should focus on, separated by ";" (e.g. History; Native American heritage; Inventions).
 const TRIP_HEADERS = ['Trip ID', 'Name', 'Start', 'Via', 'End', 'Interests', 'Miles', 'Drive Hours', 'Status', 'Places',
   'Notes Ready', 'Created At', 'Started At', 'Finished At', 'Last Mile', 'Last Seen At', 'Return Of',
-  'Stops JSON', 'Route', 'Deleted'];
+  'Stops JSON', 'Route', 'Deleted', 'Last Lat', 'Last Lng', 'Now Playing', 'Now Playing At'];
+// Last Lat/Lng and Now Playing are written every ~30 s while driving, for the live /watch page.
 
 // One row per place per trip, in road order. Mile = miles from the trip start.
 // Include "no" = skip it on the drive. Edit a Note to change what the guide says (Note Source turns to "edited"
@@ -34,6 +35,7 @@ function doGet(e) {
     switch (p.action) {
       case 'getData': return getData();
       case 'ping': return { success: true, ai: !!apiKey() };
+      case 'live': return live(String(p.tripId || ''));
       default: return { success: false, error: 'Unknown action' };
     }
   });
@@ -103,6 +105,14 @@ function table(name, headers) {
   const data = sheet.getDataRange().getValues();
   const head = {};
   data[0].forEach((h, i) => { head[String(h).trim()] = i; });
+  // Sheets made by an older version of this script get the new columns added on the right
+  const missing = headers.filter(h => !(h in head));
+  if (missing.length) {
+    const at = data[0].length;
+    sheet.getRange(1, at + 1, 1, missing.length).setValues([missing]).setFontWeight('bold');
+    missing.forEach((h, i) => { head[h] = at + i; });
+    data.forEach(r => missing.forEach(() => r.push('')));
+  }
   return { sheet: sheet, head: head, rows: data.slice(1), width: data[0].length };
 }
 
@@ -352,6 +362,14 @@ function progress(p) {
     set('Last Mile', Math.round(Number(p.lastMile) * 10) / 10);
     set('Last Seen At', now);
   }
+  if (p.lat !== undefined && isFinite(Number(p.lat)) && isFinite(Number(p.lng))) {
+    set('Last Lat', Math.round(Number(p.lat) * 1e5) / 1e5);
+    set('Last Lng', Math.round(Number(p.lng) * 1e5) / 1e5);
+  }
+  if (p.nowPlaying !== undefined) {
+    set('Now Playing', clip(p.nowPlaying, 100));
+    set('Now Playing At', now);
+  }
   const played = (p.played || []).map(String);
   if (played.length) {
     const pl = table(PLACES_SHEET, PLACE_HEADERS);
@@ -362,6 +380,22 @@ function progress(p) {
     });
   }
   return { success: true };
+}
+
+// Small read for the live /watch page: where the car is, what the guide is saying, what has been heard
+function live(tripId) {
+  const t = table(TRIPS_SHEET, TRIP_HEADERS);
+  const r = t.rows.find(x => String(x[t.head['Trip ID']]) === tripId);
+  if (!r) return { success: false, error: 'Trip not found' };
+  const trip = {};
+  ['Trip ID', 'Name', 'Status', 'Last Mile', 'Last Seen At', 'Last Lat', 'Last Lng', 'Now Playing', 'Now Playing At']
+    .forEach(h => { trip[h] = iso(r[t.head[h]]); });
+  const pl = table(PLACES_SHEET, PLACE_HEADERS);
+  const played = {};
+  pl.rows.forEach(x => {
+    if (String(x[pl.head['Trip ID']]) === tripId && x[pl.head['Played At']]) played[String(x[pl.head['Place ID']])] = iso(x[pl.head['Played At']]);
+  });
+  return { success: true, trip: trip, played: played, now: new Date().toISOString() };
 }
 
 // Run once from the editor to test your Claude key: View > Logs shows a sample note.

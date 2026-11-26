@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="te">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Roadtrip LiveRoad - Live</title>
+    <meta name="description" content="Follow a road trip live and hear the same tour guide as the car.">
+    <meta name="theme-color" content="#1f5f45">
+    <meta name="robots" content="noindex">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Trirong:wght@500;600;700&amp;family=Noto+Sans+Telugu:wght@400;600&amp;display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+    <link rel="stylesheet" href="../style.css?v=2">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div>
+                <h1><svg class="ic"><use href="#i-radio"/></svg> <span data-i18n="wTitle">Riding along</span></h1>
+                <p class="tagline" id="wTrip"></p>
+            </div>
+            <div class="count-box">
+                <select id="langSelect" class="lang-mini" aria-label="Language">
+                    <option value="te">తెలుగు</option>
+                    <option value="en">English</option>
+                </select>
+            </div>
+        </div>
+
+        <div id="errorMessage" class="error-message" style="display: none;"></div>
+        <div id="toast" class="toast" role="status" style="display: none;"></div>
+
+        <section class="view">
+            <div class="drive-head">
+                <div>
+                    <h2 id="driveTitle" data-i18n="wLoading">Loading the trip...</h2>
+                    <p id="driveSub" class="muted"></p>
+                </div>
+                <span id="liveBadge" class="badge">-</span>
+            </div>
+            <div class="trip-progress">
+                <div class="bar-track"><span id="driveBar" class="bar-fill"></span></div>
+                <div class="progress-labels"><span id="mileNow"></span><span id="mileLeft"></span></div>
+            </div>
+            <div id="driveMap" class="map"></div>
+
+            <div id="nowCard" class="now-card idle">
+                <div class="now-top">
+                    <span class="now-icon" id="nowIcon"><svg class="ic"><use href="#i-smile"/></svg></span>
+                    <div class="now-titles">
+                        <span class="now-label" id="nowLabel" data-i18n="guide">Your guide</span>
+                        <h3 id="nowName" data-i18n="wWaiting">Waiting for the car to start...</h3>
+                    </div>
+                </div>
+                <p id="nowText" class="now-text"></p>
+                <div class="now-actions">
+                    <button id="replayBtn" class="round-btn" type="button" aria-label="Replay"><svg class="ic"><use href="#i-rotate-ccw"/></svg></button>
+                    <button id="muteBtn" class="round-btn" type="button" aria-label="Mute"><svg class="ic"><use href="#i-volume-2"/></svg></button>
+                </div>
+            </div>
+
+            <div class="mat-actions drive-actions">
+                <button id="listenBtn" class="primary-btn big" type="button"><svg class="ic"><use href="#i-headphones"/></svg> <span data-i18n="wListen">Tap to listen along</span></button>
+            </div>
+            <p class="hint pad" data-i18n="wHint">Keep this page open to hear the guide at the same time as the car.</p>
+
+            <div class="section-head"><h2 data-i18n="upNext"><svg class="ic"><use href="#i-flag"/></svg> Up next</h2></div>
+            <div id="upNext" class="place-list compact"></div>
+            <details class="played-box">
+                <summary><span data-i18n="heard">Already heard</span> (<span id="playedCount">0</span>)</summary>
+                <div id="playedList" class="place-list compact"></div>
+            </details>
+        </section>
+
+        <p class="footer-note">Maps &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors. <a href="../">Roadtrip LiveRoad</a></p>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+    <script src="../icons.js?v=2"></script>
+    <script src="../common.js?v=1"></script>
+    <script src="../route.js?v=2"></script>
+    <script src="../guide.js?v=3"></script>
+    <script src="../i18n.js?v=1"></script>
+    <script src="../watch.js?v=1"></script>
+</body>
+</html>

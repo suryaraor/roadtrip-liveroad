@@ -25,14 +25,14 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: 'Inter', 'Noto Sans Telugu', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     color: var(--ink);
     background: var(--page);
     min-height: 100vh;
     padding: 20px;
 }
 button, input, select, textarea { font-family: inherit; }
-h1, h2, h3 { font-family: 'Trirong', Georgia, 'Times New Roman', serif; }
+h1, h2, h3 { font-family: 'Trirong', 'Noto Sans Telugu', Georgia, 'Times New Roman', serif; }
 a { color: var(--green); }
 
 .container {
@@ -248,3 +248,7 @@ a { color: var(--green); }
     .now-card, .played-box { margin-left: 16px; margin-right: 16px; }
     .count-box { min-width: 76px; padding: 10px; }
 }
+
+/* Telugu text needs a little more line height; the live page's language switch */
+:lang(te) .now-text, :lang(te) .place-note p { line-height: 1.75; }
+.lang-mini { font-size: 14px; padding: 6px 8px; border-radius: 10px; border: 1px solid var(--line); background: var(--card, #fff); color: inherit; }

@@ -9,8 +9,13 @@ const Voice = {
     session: 0,
     speaking: false,
 
+    teVoice: null,
+
     pick() {
         if (!('speechSynthesis' in window)) return;
+        const voices = speechSynthesis.getVoices();
+        const te = voices.filter((v) => /^te[-_]?/i.test(v.lang));
+        this.teVoice = te.find((v) => /google/i.test(v.name)) || te[0] || null;
         const all = speechSynthesis.getVoices().filter((v) => /^en[-_]/i.test(v.lang));
         const prefer = [/natural/i, /neural/i, /google us english/i, /samantha/i, /ava/i, /aria/i, /jenny/i, /allison/i, /zira/i];
         for (const re of prefer) {
@@ -32,7 +37,16 @@ const Voice = {
         return true;
     },
 
-    speak(text, onEnd) {
+    // Speaks in Telugu when the phone has a Telugu voice; otherwise falls back to the English text
+    say(text, lang, english, onEnd) {
+        if (lang === 'te') {
+            if (!this.teVoice) this.pick();
+            if (!this.teVoice && english) { this.noTelugu = true; return this.speak(english, onEnd, 'en'); }
+        }
+        return this.speak(text, onEnd, lang);
+    },
+
+    speak(text, onEnd, lang) {
         const finish = () => { if (onEnd) setTimeout(onEnd, 0); };
         if (!('speechSynthesis' in window) || this.muted) { finish(); return; }
         const synth = speechSynthesis;
@@ -40,6 +54,8 @@ const Voice = {
         clearTimeout(this.watchdog);
         if (synth.speaking || synth.pending) synth.cancel();
         if (!this.voice) this.pick();
+        const tel = lang === 'te';
+        const voice = tel ? this.teVoice : this.voice;
         const parts = (String(text).match(/[^.!?]+[.!?]+["']?\s*|[^.!?]+$/g) || [String(text)]).map((s) => s.trim()).filter(Boolean);
         let i = 0;
         this.speaking = true;
@@ -50,8 +66,8 @@ const Voice = {
             if (i >= parts.length) { this.speaking = false; finish(); return; }
             const u = new SpeechSynthesisUtterance(parts[i++]);
             this.keep.push(u);
-            u.lang = (this.voice && this.voice.lang) || 'en-US';
-            if (this.voice) u.voice = this.voice;
+            u.lang = (voice && voice.lang) || (tel ? 'te-IN' : 'en-US');
+            if (voice) u.voice = voice;
             u.rate = this.rate;
             let moved = false;
             const done = (ev) => {
@@ -64,7 +80,7 @@ const Voice = {
             u.onerror = done;
             // If the end event never comes, move on after a generous guess at the sentence's length
             const words = u.text.split(/\s+/).length;
-            this.watchdog = setTimeout(() => { if (id === this.session) done(); }, (words / 2.2 / this.rate) * 1000 + 6000);
+            this.watchdog = setTimeout(() => { if (id === this.session) done(); }, (words / (tel ? 1.4 : 2.2) / this.rate) * 1000 + 6000);
             synth.speak(u);
             // Chrome sometimes starts the queue paused
             if (synth.paused) synth.resume();
@@ -88,6 +104,7 @@ const Voice = {
         if (!n) bits.push('The phone has not loaded any voices yet.');
         if (this.lastError) bits.push(`Last speech error: ${this.lastError}.`);
         bits.push(`Using ${this.voice ? this.voice.name : 'the default voice'} (${n} voices).`);
+        bits.push(this.teVoice ? `Telugu voice: ${this.teVoice.name}.` : 'No Telugu voice on this phone.');
         return bits.join(' ');
     }
 };

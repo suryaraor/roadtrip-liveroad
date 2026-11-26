@@ -178,9 +178,9 @@ function renderTrips() {
         ic.appendChild(icon(t.returnOf ? 'repeat' : 'route'));
         const info = el('span', 'info');
         info.appendChild(el('span', 'name', t.name));
-        info.appendChild(el('span', 'sub', `${miles(t.miles)} mi · ${hoursText(t.hours)} · ${plural(t.places.filter((p) => p.include !== false).length, 'stop')}`));
+        info.appendChild(el('span', 'sub', `${miles(t.miles)} mi · ${hoursText(t.hours)} · ${T('stops', { n: t.places.filter((p) => p.include !== false).length })}`));
         const status = el('span', `badge ${t.status === 'active' ? 'ok' : t.status === 'done' ? '' : 'warn'}`,
-            t.status === 'active' ? 'On the road' : t.status === 'done' ? 'Done' : 'Planned');
+            t.status === 'active' ? T('onRoad') : t.status === 'done' ? T('done') : T('planned'));
         const chev = el('span', 'chev');
         chev.appendChild(icon('chevron-right'));
         head.append(ic, info, status, chev);
@@ -199,12 +199,12 @@ function renderTrips() {
             ? `Guide notes written: ${ready} of ${inc.length}${ready < inc.length ? ' (the rest are written as you drive, or tap below)' : ''}`
             : `Guide notes: ${ready ? `${ready} written, the rest` : 'all'} from Wikipedia${S.remote ? '' : ' until the sheet is connected'}`);
         body.appendChild(notes);
-        if (t.lastMile && t.status !== 'done') body.appendChild(el('p', 'muted small', `Last seen at mile ${miles(t.lastMile)}`));
+        if (t.lastMile && t.status !== 'done') body.appendChild(el('p', 'muted small', T('lastSeen', { m: miles(t.lastMile) })));
 
         const acts = el('div', 'card-actions');
         const go = el('button', 'primary-btn', '');
         go.type = 'button';
-        go.append(icon('play'), document.createTextNode(t.status === 'active' ? ' Continue the trip' : ' Start the trip'));
+        go.append(icon('play'), document.createTextNode(` ${t.status === 'active' ? T('cont') : T('start')}`));
         go.onclick = () => openDrive(t.id);
         body.appendChild(go);
         if (S.remote && S.ai && ready < inc.length) {
@@ -212,15 +212,16 @@ function renderTrips() {
             acts.appendChild(w);
         }
         const hasReturn = S.trips.some((x) => x.returnOf === t.id || t.returnOf === x.id);
-        if (!hasReturn) acts.appendChild(linkBtn('repeat', 'Plan the drive back', () => makeReturn(t.id)));
-        acts.appendChild(linkBtn('list', 'See the stops', () => {
+        if (!hasReturn) acts.appendChild(linkBtn('repeat', T('planBack'), () => makeReturn(t.id)));
+        acts.appendChild(linkBtn('share-2', T('share'), () => shareLive(t)));
+        acts.appendChild(linkBtn('list', T('seeStops'), () => {
             const box = body.querySelector('.place-list');
             if (box) { box.remove(); return; }
             const pl = el('div', 'place-list compact');
             t.places.filter((p) => p.include !== false).forEach((p) => pl.appendChild(placeRow(p, { note: true })));
             body.appendChild(pl);
         }));
-        acts.appendChild(linkBtn('trash-2', 'Delete', () => deleteTrip(t.id), 'quiet'));
+        acts.appendChild(linkBtn('trash-2', T('del'), () => deleteTrip(t.id), 'quiet'));
         body.appendChild(acts);
         card.appendChild(body);
         list.appendChild(card);
@@ -250,8 +251,9 @@ function placeRow(p, opts) {
     info.appendChild(el('div', 'place-sub', opts && opts.distance !== undefined ? opts.distance : bits.join(' · ')));
     if (opts && opts.note && (p.note || p.summary)) {
         const d = el('details', 'place-note');
-        d.appendChild(el('summary', '', p.note ? 'What the guide says' : 'Wikipedia'));
-        d.appendChild(el('p', '', p.note || p.summary));
+        const te = LANG === 'te' && NOTES_TE[p.id];
+        d.appendChild(el('summary', '', te ? 'గైడ్ ఏమంటాడు' : p.note ? 'What the guide says' : 'Wikipedia'));
+        d.appendChild(el('p', '', te || p.note || p.summary));
         info.appendChild(d);
     }
     row.append(dot, info);
@@ -626,10 +628,10 @@ function renderStartBtn() {
     b.innerHTML = '';
     if (D.running) {
         b.classList.add('stop');
-        b.append(icon('square'), document.createTextNode(' Stop'));
+        b.append(icon('square'), document.createTextNode(` ${T('stop')}`));
     } else {
         b.classList.remove('stop');
-        b.append(icon('play'), document.createTextNode(D.trip && D.trip.status === 'active' ? ' Continue the trip' : ' Start the trip'));
+        b.append(icon('play'), document.createTextNode(` ${D.trip && D.trip.status === 'active' ? T('cont') : T('start')}`));
     }
     $('demoBtn').style.display = D.running ? 'none' : '';
     $('muteBtn').innerHTML = '';
@@ -644,16 +646,16 @@ function renderDriveStatus() {
     const t = D.trip;
     const frac = t.miles ? Math.min(1, D.mile / t.miles) : 0;
     $('driveBar').style.width = `${(frac * 100).toFixed(1)}%`;
-    $('mileNow').textContent = `Mile ${miles(D.mile)}`;
-    $('mileLeft').textContent = `${miles(Math.max(0, t.miles - D.mile))} mi to ${shortName(t.end.label)}`;
+    $('mileNow').textContent = T('mile', { m: miles(D.mile) });
+    $('mileLeft').textContent = T('toGo', { m: miles(Math.max(0, t.miles - D.mile)), c: shortName(t.end.label) });
     const up = $('upNext');
     up.innerHTML = '';
     const next = included().filter((p) => !D.done.has(p.id) && p.mile >= D.mile - 1).slice(0, 6);
-    if (!next.length) up.appendChild(el('p', 'no-results', 'No more stops on this trip.'));
+    if (!next.length) up.appendChild(el('p', 'no-results', T('noMore')));
     next.forEach((p) => {
         const dist = p.mile - D.mile;
-        const when = dist <= 0.3 ? 'right about now' : `in ${miles(dist)} mi`;
-        up.appendChild(placeRow(p, { distance: `${kindInfo(p.kind).one} · ${when}` }));
+        const when = dist <= 0.3 ? T('now') : T('inMi', { m: miles(dist) });
+        up.appendChild(placeRow(p, { distance: `${kindName(p.kind, kindInfo(p.kind).one)} · ${when}` }));
     });
     const played = included().filter((p) => D.done.has(p.id));
     $('playedCount').textContent = played.length;
@@ -691,14 +693,14 @@ async function startDrive(demo) {
     renderStartBtn();
     // Anything already behind us when we start is skipped quietly
     D.skipBehind = true;
-    const hello = `Hi there, I'm Miles, your guide from ${shortName(t.start.label)} to ${shortName(t.end.label)}. ` +
-        `That's about ${Math.round(t.miles)} miles, and I've got stories for ${included().length} stops along the way. ` +
-        `Driver, you keep your eyes on the road, and I'll do the talking. Let's roll!`;
-    showNow({ name: 'Here we go!', kind: 'intro' }, hello);
+    const hv = { a: shortName(t.start.label), b: shortName(t.end.label), n: Math.round(t.miles), k: included().length };
+    const hello = T('hello', hv);
+    showNow({ name: T('hereWeGo'), kind: 'intro' }, hello);
     const intro = { id: '_intro' };
     D.current = intro;
     // Speak first, while we're still inside the tap (iPhones refuse speech that starts later)
-    Voice.speak(hello, () => { if (D.current === intro) D.current = null; pump(); });
+    Voice.say(hello, LANG, englishOf('hello', hv), () => { if (D.current === intro) D.current = null; pump(); });
+    if (LANG === 'te' && !Voice.teVoice) setTimeout(() => showToast(T('noTeVoice')), 1500);
     if ('wakeLock' in navigator) navigator.wakeLock.request('screen').then((w) => { D.wake = w; }).catch(() => { /* not allowed */ });
     if (demo) {
         D.demoMile = D.mile;
@@ -746,7 +748,7 @@ function stopDrive() {
     D.current = null;
     D.queue = [];
     if (D.wake) { D.wake.release().catch(() => {}); D.wake = null; }
-    $('gpsBadge').textContent = 'GPS starts with Start';
+    $('gpsBadge').textContent = T('gpsIdle');
     $('gpsBadge').className = 'badge';
     if (!D.demo) pushProgress({});
     else {
@@ -794,7 +796,8 @@ function onFix(lat, lng, accuracy, speed) {
     placeMarker();
     renderDriveStatus();
     pump();
-    if (!D.demo && Date.now() - D.lastPush > 180000) pushProgress({});
+    // Every 30 s, so anyone on the /watch link sees the car move
+    if (!D.demo && Date.now() - D.lastPush > 30000) pushProgress({});
 }
 
 // Picks the next stop to talk about: the most interesting one that's still close
@@ -812,10 +815,11 @@ function pump() {
 }
 
 function playPlace(p, replay) {
-    const text = p.note || templateNote(p);
+    const n = noteFor(p);
     D.current = p;
-    showNow(p, text);
-    Voice.speak(text, () => {
+    showNow(p, n.text);
+    if (!replay && !D.demo) pushProgress({ nowPlaying: p.id });
+    Voice.say(n.text, n.lang, n.en, () => {
         if (D.current === p) D.current = null;
         if (!replay) markPlayed(p);
         renderDriveStatus();
@@ -825,9 +829,9 @@ function playPlace(p, replay) {
 }
 
 function showNow(p, text) {
-    const k = p.kind === 'intro' ? { one: 'Your guide', icon: 'smile', color: '#e07a1f' } : kindInfo(p.kind);
+    const k = p.kind === 'intro' ? { one: T('guide'), icon: 'smile', color: '#e07a1f' } : kindInfo(p.kind);
     $('nowCard').classList.remove('idle');
-    $('nowLabel').textContent = p.kind === 'intro' ? 'Your guide' : `${k.one}${p.mile !== undefined ? ` · mile ${miles(p.mile)}` : ''}`;
+    $('nowLabel').textContent = p.kind === 'intro' ? T('guide') : `${kindName(p.kind, k.one)}${p.mile !== undefined ? ` · ${T('mile', { m: miles(p.mile) })}` : ''}`;
     $('nowName').textContent = p.name;
     $('nowText').textContent = text;
     const ic = $('nowIcon');
@@ -842,7 +846,7 @@ function markPlayed(p) {
     p.playedAt = new Date().toISOString();
     D.playedSince.push(p.id);
     saveLocal();
-    if (!D.demo && D.playedSince.length >= 3) pushProgress({});
+    if (!D.demo) pushProgress({ nowPlaying: '' });
 }
 
 function pushProgress(extra) {
@@ -852,7 +856,8 @@ function pushProgress(extra) {
     saveLocal();
     const played = D.playedSince.splice(0);
     D.lastPush = Date.now();
-    apiPost('progress', Object.assign({ tripId: t.id, lastMile: D.mile, played }, extra), { keepalive: true })
+    const pos = D.pos && !D.demo ? { lat: D.pos[0], lng: D.pos[1] } : {};
+    apiPost('progress', Object.assign({ tripId: t.id, lastMile: D.mile, played }, pos, extra), { keepalive: true })
         .catch(() => { D.playedSince.push(...played); });
 }
 
@@ -864,10 +869,10 @@ function finishTrip() {
         saveLocal();
         pushProgress({ status: 'done' });
     }
-    const bye = `And that's a wrap! Welcome to ${shortName(t.end.label)}. ${Math.round(t.miles)} miles, ${D.done.size} stories, ` +
-        `and hopefully a few smiles. Thanks for riding with me. Stretch those legs, you earned it!`;
+    const bv = { c: shortName(t.end.label), n: Math.round(t.miles), k: D.done.size };
+    const bye = T('bye', bv);
     const after = () => { D.finishing = false; stopDrive(); };
-    const say = () => { showNow({ name: `You made it to ${shortName(t.end.label)}!`, kind: 'intro' }, bye); Voice.speak(bye, after); };
+    const say = () => { showNow({ name: T('madeIt', bv), kind: 'intro' }, bye); Voice.say(bye, LANG, englishOf('bye', bv), after); };
     if (D.current) { const wait = setInterval(() => { if (!D.current) { clearInterval(wait); say(); } }, 1000); } else say();
 }
 
@@ -880,6 +885,25 @@ function prefetchNotes() {
     if (!ids.length) return;
     ids.forEach((id) => D.prefetched.add(id));
     requestNotes(D.trip.id, ids);
+}
+
+// ---------- Share the live drive ----------
+// The link carries the trip and the sheet's deployment ID, so the watcher's phone reads the same sheet
+function watchUrl(t) {
+    const m = String(CONFIG.appsScriptUrl).match(/\/macros\/s\/([\w-]+)\/exec/);
+    if (!m) return '';
+    const q = new URLSearchParams({ t: t.id, s: m[1] });
+    if (CONFIG.accessKey) q.set('k', CONFIG.accessKey);
+    return `${location.origin}${location.pathname.replace(/[^/]*$/, '')}watch/?${q}`;
+}
+
+async function shareLive(t) {
+    const url = watchUrl(t);
+    if (!url || !S.remote) { showToast(T('shareNeedsSheet')); return; }
+    if (navigator.share) {
+        try { await navigator.share({ title: t.name, text: T('wTitle'), url }); return; } catch (e) { if (e.name === 'AbortError') return; }
+    }
+    try { await navigator.clipboard.writeText(url); showToast(T('copied')); } catch (e) { showToast(url); }
 }
 
 // ---------- Wiring ----------
@@ -899,6 +923,8 @@ function init() {
         return;
     }
     loadLocal();
+    applyI18n();
+    loadTeluguNotes('');
     try { S.interests = JSON.parse(safeGet('rl_interests') || 'null') || DEFAULT_INTERESTS.slice(); } catch (e) { S.interests = DEFAULT_INTERESTS.slice(); }
     const fromUrl = prefillFromUrl();
     renderPlanForm();
@@ -934,12 +960,15 @@ function init() {
         Voice.muted = false;
         renderStartBtn();
         Voice.unlock();
-        Voice.speak('Testing, testing. If you can hear me, the guide is ready to roll.', () => {
+        Voice.say(T('soundTest'), LANG, STR.en.soundTest, () => {
             showToast(`Done. ${Voice.diagnose()} No sound? Turn up the media volume, and on iPhone flip off the silent switch.`);
         });
         showToast(`Speaking now... ${Voice.diagnose()}`);
     };
-    $('testVoice').onclick = () => { Voice.unlock(); Voice.speak("Howdy! I'm Miles, your road-trip guide. Buckle up, grab a snack, and let's find some stories."); };
+    $('testVoice').onclick = () => { Voice.unlock(); Voice.say(T('test'), LANG, STR.en.test); };
+    $('langSelect').value = LANG;
+    $('langSelect').onchange = () => { setLang($('langSelect').value); renderTrips(); if (D.trip) renderDrive(); };
+    $('shareDrive').onclick = () => { if (D.trip) shareLive(D.trip); };
 
     document.addEventListener('visibilitychange', async () => {
         if (document.visibilityState === 'visible' && 'speechSynthesis' in window) speechSynthesis.resume();

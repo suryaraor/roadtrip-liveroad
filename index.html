@@ -1,5 +1,5 @@
 ﻿<!DOCTYPE html>
-<html lang="en">
+<html lang="te">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -10,28 +10,28 @@
     <link rel="manifest" href="manifest.json">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Trirong:wght@500;600;700&amp;display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Trirong:wght@500;600;700&amp;family=Noto+Sans+Telugu:wght@400;600&amp;display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-    <link rel="stylesheet" href="style.css?v=1">
+    <link rel="stylesheet" href="style.css?v=2">
 </head>
 <body>
     <div class="container">
         <div class="header">
             <div>
                 <h1><svg class="ic"><use href="#i-route"/></svg> Roadtrip LiveRoad</h1>
-                <p class="tagline">Your tour guide for every mile</p>
+                <p class="tagline" data-i18n="tagline">Your tour guide for every mile</p>
             </div>
             <div class="count-box">
                 <div class="count-label">Trips</div>
-                <div class="count-number" id="tripCount">â€“</div>
+                <div class="count-number" id="tripCount">-</div>
                 <div class="count-label" id="syncLabel">local</div>
             </div>
         </div>
 
         <nav class="tabs" role="tablist">
-            <button class="tab" role="tab" data-view="trips"><svg class="ic"><use href="#i-list"/></svg>Trips</button>
-            <button class="tab" role="tab" data-view="plan"><svg class="ic"><use href="#i-plus"/></svg>Plan</button>
-            <button class="tab" role="tab" data-view="drive"><svg class="ic"><use href="#i-car"/></svg>Drive</button>
+            <button class="tab" role="tab" data-view="trips" data-i18n="trips"><svg class="ic"><use href="#i-list"/></svg>Trips</button>
+            <button class="tab" role="tab" data-view="plan" data-i18n="plan"><svg class="ic"><use href="#i-plus"/></svg>Plan</button>
+            <button class="tab" role="tab" data-view="drive" data-i18n="drive"><svg class="ic"><use href="#i-car"/></svg>Drive</button>
         </nav>
 
         <div id="demoBanner" class="demo-banner" style="display: none;">
@@ -44,16 +44,23 @@
         <!-- Trips -->
         <section id="view-trips" class="view" style="display: none;">
             <div class="section-head">
-                <h2>Your road trips</h2>
-                <p>Tap a trip to see its stops, or start driving.</p>
+                <h2 data-i18n="tripsHead">Your road trips</h2>
+                <p data-i18n="tripsSub">Tap a trip to see its stops, or start driving.</p>
             </div>
             <div id="tripList" class="cards"></div>
             <div class="mat-actions">
-                <button id="newTrip" class="primary-btn" type="button"><svg class="ic"><use href="#i-plus"/></svg> Plan a new trip</button>
+                <button id="newTrip" class="primary-btn" type="button" data-i18n="newTrip"><svg class="ic"><use href="#i-plus"/></svg> Plan a new trip</button>
             </div>
 
             <details class="setup-instructions" id="settingsBox">
-                <summary><svg class="ic"><use href="#i-settings"/></svg> Settings</summary>
+                <summary data-i18n="settings"><svg class="ic"><use href="#i-settings"/></svg> Settings</summary>
+                <label class="field">
+                    <span class="field-label" data-i18n="language">Language</span>
+                    <select id="langSelect" class="text-input">
+                        <option value="te">తెలుగు (Telugu)</option>
+                        <option value="en">English</option>
+                    </select>
+                </label>
                 <label class="field">
                     <span class="field-label">Google Sheet web app URL <small>(see README)</small></span>
                     <input type="text" id="urlInput" class="text-input" placeholder="https://script.google.com/macros/s/.../exec">
@@ -62,12 +69,12 @@
                     <span class="field-label">Access key <small>(only if you set ACCESS_KEY in the script)</small></span>
                     <input type="password" id="keyInput" class="text-input" autocomplete="off">
                 </label>
-                <button id="saveUrlBtn" class="primary-btn" type="button">Save &amp; sync</button>
+                <button id="saveUrlBtn" class="primary-btn" type="button" data-i18n="saveSync">Save &amp; sync</button>
                 <label class="field">
-                    <span class="field-label">Voice speed</span>
+                    <span class="field-label" data-i18n="voiceSpeed">Voice speed</span>
                     <input type="range" id="rateInput" min="0.8" max="1.25" step="0.05">
                 </label>
-                <button id="testVoice" class="ghost-btn" type="button"><svg class="ic"><use href="#i-volume-2"/></svg> Test the guide's voice</button>
+                <button id="testVoice" class="ghost-btn" type="button" data-i18n="testVoice"><svg class="ic"><use href="#i-volume-2"/></svg> Test the guide's voice</button>
             </details>
         </section>
 
@@ -125,14 +132,14 @@
 
         <!-- Drive -->
         <section id="view-drive" class="view" style="display: none;">
-            <div id="driveEmpty" class="no-results">Pick a trip on the Trips tab and tap <strong>Start the trip</strong>.</div>
+            <div id="driveEmpty" class="no-results" data-i18n="driveEmpty">Pick a trip on the Trips tab and tap Start the trip.</div>
             <div id="driveBody" style="display: none;">
                 <div class="drive-head">
                     <div>
                         <h2 id="driveTitle"></h2>
                         <p id="driveSub" class="muted"></p>
                     </div>
-                    <span id="gpsBadge" class="badge">GPS starts with Start</span>
+                    <span id="gpsBadge" class="badge" data-i18n="gpsIdle">GPS starts with Start</span>
                 </div>
                 <div class="trip-progress">
                     <div class="bar-track"><span id="driveBar" class="bar-fill"></span></div>
@@ -144,11 +151,11 @@
                     <div class="now-top">
                         <span class="now-icon" id="nowIcon"><svg class="ic"><use href="#i-smile"/></svg></span>
                         <div class="now-titles">
-                            <span class="now-label" id="nowLabel">Your guide</span>
-                            <h3 id="nowName">Ready when you are</h3>
+                            <span class="now-label" id="nowLabel" data-i18n="guide">Your guide</span>
+                            <h3 id="nowName" data-i18n="ready">Ready when you are</h3>
                         </div>
                     </div>
-                    <p id="nowText" class="now-text">Tap Start. I'll talk whenever we're near a town, a river or something fun.</p>
+                    <p id="nowText" class="now-text" data-i18n="readyText">Tap Start. I'll talk whenever we're near a town, a river or something fun.</p>
                     <div class="now-actions">
                         <button id="replayBtn" class="round-btn" type="button" aria-label="Replay"><svg class="ic"><use href="#i-rotate-ccw"/></svg></button>
                         <button id="skipBtn" class="round-btn" type="button" aria-label="Skip"><svg class="ic"><use href="#i-skip-forward"/></svg></button>
@@ -158,15 +165,16 @@
 
                 <div class="mat-actions drive-actions">
                     <button id="startBtn" class="primary-btn big" type="button"><svg class="ic"><use href="#i-play"/></svg> Start the trip</button>
-                    <button id="demoBtn" class="ghost-btn" type="button"><svg class="ic"><use href="#i-car"/></svg> Demo drive (no GPS)</button>
+                    <button id="demoBtn" class="ghost-btn" type="button" data-i18n="demo"><svg class="ic"><use href="#i-car"/></svg> Demo drive (no GPS)</button>
+                    <button id="shareDrive" class="ghost-btn" type="button" data-i18n="share"><svg class="ic"><use href="#i-share-2"/></svg> Share the live drive</button>
                 </div>
-                <p class="hint pad">Keep this screen on and the phone plugged in: phones pause web pages when the screen is off.
-                    <button id="soundCheck" class="link-btn" type="button"><svg class="ic"><use href="#i-volume-2"/></svg> No sound? Tap to check</button></p>
+                <p class="hint pad"><span data-i18n="screenHint">Keep this screen on and the phone plugged in: phones pause web pages when the screen is off.</span>
+                    <button id="soundCheck" class="link-btn" type="button" data-i18n="noSound"><svg class="ic"><use href="#i-volume-2"/></svg> No sound? Tap to check</button></p>
 
-                <div class="section-head"><h2><svg class="ic"><use href="#i-flag"/></svg> Up next</h2></div>
+                <div class="section-head"><h2 data-i18n="upNext"><svg class="ic"><use href="#i-flag"/></svg> Up next</h2></div>
                 <div id="upNext" class="place-list compact"></div>
                 <details class="played-box">
-                    <summary>Already heard (<span id="playedCount">0</span>)</summary>
+                    <summary><span data-i18n="heard">Already heard</span> (<span id="playedCount">0</span>)</summary>
                     <div id="playedList" class="place-list compact"></div>
                 </details>
             </div>
@@ -176,10 +184,11 @@
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-    <script src="icons.js?v=1"></script>
+    <script src="icons.js?v=2"></script>
     <script src="common.js?v=1"></script>
     <script src="route.js?v=2"></script>
-    <script src="guide.js?v=2"></script>
-    <script src="app.js?v=4"></script>
+    <script src="guide.js?v=3"></script>
+    <script src="i18n.js?v=1"></script>
+    <script src="app.js?v=5"></script>
 </body>
 </html>
