@@ -684,6 +684,7 @@ function renderDriveStatus() {
         pl.appendChild(r);
     });
     drawProgress();
+    renderNextBar(included(), D.mile, isDone, kindInfo);
 }
 
 function isDone(p) { return D.done.has(p.id) || p.mile < D.mile - 1; }

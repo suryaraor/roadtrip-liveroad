@@ -139,6 +139,7 @@ function render() {
     }
 
     drawWatchMap();
+    renderNextBar(W.places, m, wDone, (kd) => { const x = wk(kd); return { icon: x[1], color: x[2], one: x[0] }; });
     const up = $('upNext');
     up.innerHTML = '';
     const next = W.places.filter((p) => !wDone(p)).slice(0, 6);

@@ -11,7 +11,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Trirong:wght@500;600;700&amp;family=Noto+Sans+Telugu:wght@400;600&amp;display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-    <link rel="stylesheet" href="../style.css?v=3">
+    <link rel="stylesheet" href="../style.css?v=4">
 </head>
 <body>
     <div class="container">
@@ -44,6 +44,14 @@
                 <div class="progress-labels"><span id="mileNow"></span><span id="mileLeft"></span></div>
             </div>
             <div id="driveMap" class="map"></div>
+            <div id="nextBar" class="next-bar" hidden>
+                <span id="nextIcon" class="next-icon"></span>
+                <div class="next-info">
+                    <div class="next-top"><span class="next-label" data-i18n="nextStop">Next stop</span><span id="nextMiles" class="next-miles"></span></div>
+                    <div class="next-name"><strong id="nextName"></strong> <span id="nextTag" class="next-tag"></span></div>
+                    <div class="next-track"><span id="nextFill" class="next-fill"></span></div>
+                </div>
+            </div>
 
             <div id="nowCard" class="now-card idle">
                 <div class="now-top">
@@ -81,7 +89,7 @@
     <script src="../common.js?v=1"></script>
     <script src="../route.js?v=3"></script>
     <script src="../guide.js?v=4"></script>
-    <script src="../i18n.js?v=5"></script>
-    <script src="../watch.js?v=4"></script>
+    <script src="../i18n.js?v=6"></script>
+    <script src="../watch.js?v=5"></script>
 </body>
 </html>

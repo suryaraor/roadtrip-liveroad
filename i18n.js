@@ -16,6 +16,7 @@ const STR = {
         start: 'Start the trip', cont: 'Continue the trip', stop: 'Stop', demo: 'Demo drive (no GPS)',
         screenHint: 'Keep this screen on and the phone plugged in: phones pause web pages when the screen is off.',
         noSound: 'No sound? Tap to check', upNext: 'Up next', heard: 'Done', heardOne: 'heard', passed: 'passed', rerouting: 'We left the planned road. Finding the road from here...', rerouted: 'New road from here to {c}: {m} miles. Stops updated.', rerouteFail: "Couldn't plan the new road yet; will try again", newStops: 'Added {n} new stops on this road ({k} towns and cities).', share: 'Share the live drive',
+        nextStop: 'Next stop', miLeft: '{m} mi to go',
         mile: 'Mile {m}', toGo: '{m} mi to {c}', noMore: 'No more stops on this trip.', now: 'right about now',
         inMi: 'in {m} mi', onRoad: 'On the road', done: 'Done', planned: 'Planned', lastSeen: 'Last seen at mile {m}',
         stops: '{n} stops', seeStops: 'See the stops', planBack: 'Plan the drive back', del: 'Delete',
@@ -45,6 +46,7 @@ const STR = {
         screenHint: 'స్క్రీన్ ఆన్‌లో ఉంచండి, ఫోన్ ఛార్జింగ్‌లో పెట్టండి: స్క్రీన్ ఆఫ్ అయితే ఫోన్లు వెబ్ పేజీని ఆపేస్తాయి.',
         noSound: 'శబ్దం రావడం లేదా? ఇక్కడ నొక్కండి', upNext: 'తర్వాత వచ్చేవి', heard: 'పూర్తయినవి', heardOne: 'విన్నాం', passed: 'దాటేశాం', rerouting: 'ప్లాన్ చేసిన రోడ్డు వదిలేశాం. ఇక్కడి నుంచి దారి వెతుకుతున్నాం...', rerouted: 'ఇక్కడి నుంచి {c} కి కొత్త దారి: {m} మైళ్లు. స్టాప్‌లు మార్చాం.', rerouteFail: 'కొత్త దారి ఇంకా దొరకలేదు; మళ్ళీ ప్రయత్నిస్తాం', newStops: 'ఈ దారిలో {n} కొత్త స్టాప్‌లు చేర్చాం ({k} ఊళ్లు, నగరాలు).',
         share: 'లైవ్ డ్రైవ్ షేర్ చేయండి',
+        nextStop: 'తదుపరి ఆగే చోటు', miLeft: 'ఇంకా {m} మైళ్లు',
         mile: 'మైలు {m}', toGo: '{c}కి ఇంకా {m} మైళ్లు', noMore: 'ఈ ప్రయాణంలో ఇంకా ఆగే చోట్లు లేవు.', now: 'ఇప్పుడే',
         inMi: '{m} మైళ్లలో', onRoad: 'రోడ్డు మీద', done: 'పూర్తయింది', planned: 'ప్లాన్ చేశారు',
         lastSeen: 'చివరిసారి మైలు {m} దగ్గర', stops: '{n} చోట్లు', seeStops: 'ఆగే చోట్లు చూడండి',
@@ -107,6 +109,34 @@ function kindName(kind, english) {
 // further on the road (they replace the sheet's note). Re-read every 5 minutes, so an open page picks up
 // newly enriched notes without a reload.
 let NOTES_EN = {};
+let HIGHLIGHTS = {};   // a few words per stop for the "Next stop" bar: { id: { en, te } }
+
+// The bar under the map: next stop, its highlights in a few words, and how far along we are toward it
+// (from the last stop passed to the next one) with the miles still to go.
+function renderNextBar(places, mile, isDone, look) {
+    const bar = document.getElementById('nextBar');
+    if (!bar) return;
+    const sorted = places.slice().sort((a, b) => a.mile - b.mile);
+    const next = sorted.find((p) => !isDone(p) && p.mile >= mile - 0.3);
+    if (!next) { bar.hidden = true; return; }
+    const prev = sorted.filter((p) => p.mile < next.mile && p.mile <= mile).pop();
+    const from = prev ? prev.mile : 0;
+    const span = next.mile - from;
+    const frac = span > 0 ? Math.min(1, Math.max(0, (mile - from) / span)) : 1;
+    const left = Math.max(0, next.mile - mile);
+    const k = look(next.kind);
+    const h = HIGHLIGHTS[next.id];
+    bar.hidden = false;
+    bar.style.setProperty('--kind', k.color);
+    const ic = document.getElementById('nextIcon');
+    ic.innerHTML = '';
+    ic.appendChild(icon(k.icon));
+    document.getElementById('nextName').textContent = next.name;
+    document.getElementById('nextTag').textContent = h ? (LANG === 'te' ? h.te || h.en : h.en) : kindName(next.kind, k.one);
+    document.getElementById('nextMiles').textContent = left <= 0.3 ? T('now') : T('miLeft', { m: miles(left) });
+    document.getElementById('nextFill').style.width = `${(frac * 100).toFixed(1)}%`;
+    bar.setAttribute('aria-label', `${T('nextStop')}: ${next.name}, ${document.getElementById('nextMiles').textContent}`);
+}
 async function loadTeluguNotes(base) {
     const get = async (f) => {
         const r = await fetch(`${base || ''}${f}?t=${Math.floor(Date.now() / 60000)}`, { cache: 'no-store' });
@@ -114,6 +144,7 @@ async function loadTeluguNotes(base) {
     };
     try { NOTES_TE = (await get('notes-te.json')) || NOTES_TE; } catch (e) { /* offline: the Telugu template still works */ }
     try { NOTES_EN = (await get('notes-en.json')) || NOTES_EN; } catch (e) { /* none yet */ }
+    try { HIGHLIGHTS = (await get('highlights.json')) || HIGHLIGHTS; } catch (e) { /* none yet */ }
     if (!loadTeluguNotes.timer) {
         loadTeluguNotes.timer = setInterval(() => {
             if (document.visibilityState === 'visible') loadTeluguNotes(base);
