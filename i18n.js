@@ -166,9 +166,36 @@ const MapView = {
                 return b;
             }
         });
+        // Language switch beside it: Telugu <-> English, same as the Language setting
+        const Lang = L.Control.extend({
+            options: { position: 'topright' },
+            onAdd: () => {
+                const b = L.DomUtil.create('button', 'map-view-btn lang-btn');
+                b.type = 'button';
+                L.DomEvent.disableClickPropagation(b);
+                b.onclick = () => {
+                    const sel = document.getElementById('langSelect');
+                    const to = LANG === 'te' ? 'en' : 'te';
+                    if (sel) { sel.value = to; sel.dispatchEvent(new Event('change')); } else setLang(to);
+                    this.fitted = this.mode === 'all' ? 'all' : this.fitted;
+                    this.labelLang(b);
+                    this.label(map._viewBtn);
+                };
+                return b;
+            }
+        });
+        map._langBtn = new Lang().addTo(map).getContainer();
+        this.labelLang(map._langBtn);
         map._viewBtn = new Ctl().addTo(map).getContainer();
         map.on('dragstart', () => { this.free = true; this.label(map._viewBtn); });
         this.label(map._viewBtn);
+    },
+
+    labelLang(b) {
+        if (!b) return;
+        b.innerHTML = '';
+        [['te', 'తెలుగు'], ['en', 'English']].forEach(([k, t]) => b.appendChild(el('span', LANG === k ? 'on' : '', t)));
+        b.setAttribute('aria-label', LANG === 'te' ? 'Switch to English' : 'తెలుగుకి మార్చండి');
     },
 
     // The button says what a tap will show
@@ -185,6 +212,7 @@ const MapView = {
         this.last = [map, car, next, routeBounds];
         this.attach(map);
         this.label(map._viewBtn);
+        this.labelLang(map._langBtn);
         if (this.free) return;
         if (this.mode === 'next' && car && next) {
             map.fitBounds(L.latLngBounds([car, [next.lat, next.lng]]), { padding: [44, 44], maxZoom: 14, animate: this.fitted === 'next' });
