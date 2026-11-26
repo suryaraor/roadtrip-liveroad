@@ -502,8 +502,11 @@ function drawMap(id, coords, places) {
     }
     m._layers2.clearLayers();
     const line = L.polyline(coords, { color: '#1f5f45', weight: 5, opacity: 0.85 }).addTo(m._layers2);
+    m._line = line;
+    m._pm = {};
+    m._doneLine = null;
     places.filter((p) => p.include !== false).forEach((p) => {
-        L.circleMarker([p.lat, p.lng], {
+        m._pm[p.id] = L.circleMarker([p.lat, p.lng], {
             radius: p.kind === 'city' ? 7 : p.kind === 'village' ? 4 : 5,
             color: '#fff', weight: 1.5, fillColor: kindInfo(p.kind).color, fillOpacity: 0.95
         }).bindTooltip(p.name).addTo(m._layers2);
@@ -618,6 +621,7 @@ function renderDrive() {
     $('driveTitle').textContent = t.name;
     $('driveSub').textContent = `${miles(t.miles)} miles · ${[t.start.label, ...t.via.map((v) => v.label), t.end.label].map(shortName).join(' → ')}`;
     const m = drawMap('driveMap', D.route.coords, t.places);
+    if (m) m._line.setStyle({ opacity: 0.45, dashArray: '8 8' }); // road still ahead
     if (m && D.pos) placeMarker();
     renderDriveStatus();
     renderStartBtn();
@@ -650,21 +654,45 @@ function renderDriveStatus() {
     $('mileLeft').textContent = T('toGo', { m: miles(Math.max(0, t.miles - D.mile)), c: shortName(t.end.label) });
     const up = $('upNext');
     up.innerHTML = '';
-    const next = included().filter((p) => !D.done.has(p.id) && p.mile >= D.mile - 1).slice(0, 6);
+    const next = included().filter((p) => !isDone(p)).slice(0, 6);
     if (!next.length) up.appendChild(el('p', 'no-results', T('noMore')));
     next.forEach((p) => {
         const dist = p.mile - D.mile;
         const when = dist <= 0.3 ? T('now') : T('inMi', { m: miles(dist) });
         up.appendChild(placeRow(p, { distance: `${kindName(p.kind, kindInfo(p.kind).one)} · ${when}` }));
     });
-    const played = included().filter((p) => D.done.has(p.id));
-    $('playedCount').textContent = played.length;
+    // Done = heard, or the car is already past it
+    const done = included().filter(isDone);
+    $('playedCount').textContent = done.length;
     const pl = $('playedList');
     pl.innerHTML = '';
-    played.slice().reverse().forEach((p) => {
-        const r = placeRow(p, { note: true });
+    done.slice().reverse().forEach((p) => {
+        const heard = D.done.has(p.id);
+        const r = placeRow(p, { note: true, distance: `✓ ${heard ? T('heardOne') : T('passed')} · ${T('mile', { m: miles(p.mile) })}` });
+        r.classList.add('done');
         r.appendChild(iconBtn('play', `Play ${p.name} again`, () => playPlace(p, true)));
         pl.appendChild(r);
+    });
+    drawProgress();
+}
+
+function isDone(p) { return D.done.has(p.id) || p.mile < D.mile - 1; }
+
+// The road already driven as a solid line, and passed stops greyed out with a tick
+function drawProgress() {
+    const m = S.maps.driveMap;
+    if (!m || !m._pm || !D.route) return;
+    const path = routeUpTo(D.route, D.mile * M_PER_MI);
+    if (!m._doneLine) m._doneLine = L.polyline([], { color: '#1f5f45', weight: 6, opacity: 0.95 }).addTo(m._layers2);
+    m._doneLine.setLatLngs(path);
+    included().forEach((p) => {
+        const mk = m._pm[p.id];
+        if (!mk) return;
+        const d = isDone(p);
+        if (mk._done === d) return;
+        mk._done = d;
+        mk.setStyle(d ? { fillColor: '#9aa59f', fillOpacity: 0.7 } : { fillColor: kindInfo(p.kind).color, fillOpacity: 0.95 });
+        mk.setTooltipContent(d ? `✓ ${p.name}` : p.name);
     });
 }
 

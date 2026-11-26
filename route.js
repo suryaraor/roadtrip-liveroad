@@ -64,6 +64,16 @@ function pointAt(route, meters) {
     return [coords[lo][0] + t * (coords[hi][0] - coords[lo][0]), coords[lo][1] + t * (coords[hi][1] - coords[lo][1])];
 }
 
+// The stretch of road already driven: start of the route up to `meters` along it
+function routeUpTo(route, meters) {
+    const { coords, cum } = route;
+    if (!coords.length || meters <= 0) return [];
+    const out = [];
+    for (let i = 0; i < coords.length && cum[i] < meters; i++) out.push(coords[i]);
+    out.push(pointAt(route, meters));
+    return out;
+}
+
 // Douglas-Peucker, tolerance in meters
 function simplify(coords, tol) {
     if (coords.length < 3) return coords.slice();

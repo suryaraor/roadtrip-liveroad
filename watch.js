@@ -133,18 +133,20 @@ function render() {
     drawWatchMap();
     const up = $('upNext');
     up.innerHTML = '';
-    const next = W.places.filter((p) => !W.played[p.id] && p.mile >= m - 1).slice(0, 6);
+    const next = W.places.filter((p) => !wDone(p)).slice(0, 6);
     if (!next.length) up.appendChild(el('p', 'no-results', T('noMore')));
     next.forEach((p) => {
         const dist = p.mile - m;
         up.appendChild(wRow(p, `${kindName(p.kind, wk(p.kind)[0])} · ${dist <= 0.3 ? T('now') : T('inMi', { m: miles(dist) })}`));
     });
-    const heard = W.places.filter((p) => W.played[p.id]).sort((a, b) => String(W.played[b.id]).localeCompare(String(W.played[a.id])));
-    $('playedCount').textContent = heard.length;
+    // Done = heard in the car, or the car is already past it (newest first)
+    const done = W.places.filter(wDone).sort((a, b) => b.mile - a.mile);
+    $('playedCount').textContent = done.length;
     const pl = $('playedList');
     pl.innerHTML = '';
-    heard.forEach((p) => {
-        const r = wRow(p, `${kindName(p.kind, wk(p.kind)[0])} · ${T('mile', { m: miles(p.mile) })}`, true);
+    done.forEach((p) => {
+        const r = wRow(p, `✓ ${W.played[p.id] ? T('heardOne') : T('passed')} · ${T('mile', { m: miles(p.mile) })}`, true);
+        r.classList.add('done');
         const b = el('button', 'icon-btn');
         b.type = 'button';
         b.setAttribute('aria-label', `Play ${p.name}`);
@@ -154,6 +156,8 @@ function render() {
         pl.appendChild(r);
     });
 }
+
+function wDone(p) { return !!W.played[p.id] || p.mile < carMile() - 1; }
 
 function wRow(p, sub, withNote) {
     const k = wk(p.kind);
@@ -179,9 +183,12 @@ function drawWatchMap() {
     if (!W.map) {
         W.map = L.map('driveMap', { zoomControl: true });
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, attribution: '&copy; OpenStreetMap' }).addTo(W.map);
-        const line = L.polyline(W.route.coords, { color: '#1f5f45', weight: 5, opacity: 0.85 }).addTo(W.map);
+        // Road still ahead: faint and dashed; the part already driven is drawn solid on top
+        const line = L.polyline(W.route.coords, { color: '#1f5f45', weight: 5, opacity: 0.45, dashArray: '8 8' }).addTo(W.map);
+        W.doneLine = L.polyline([], { color: '#1f5f45', weight: 6, opacity: 0.95 }).addTo(W.map);
+        W.pm = {};
         W.places.forEach((p) => {
-            L.circleMarker([p.lat, p.lng], {
+            W.pm[p.id] = L.circleMarker([p.lat, p.lng], {
                 radius: p.kind === 'city' ? 7 : p.kind === 'village' ? 4 : 5,
                 color: '#fff', weight: 1.5, fillColor: wk(p.kind)[2], fillOpacity: 0.95
             }).bindTooltip(p.name).addTo(W.map);
@@ -190,6 +197,15 @@ function drawWatchMap() {
         W.follow = true;
         W.map.on('dragstart', () => { W.follow = false; });
     }
+    W.doneLine.setLatLngs(routeUpTo(W.route, carMile() * M_PER_MI));
+    W.places.forEach((p) => {
+        const mk = W.pm[p.id];
+        const d = wDone(p);
+        if (!mk || mk._done === d) return;
+        mk._done = d;
+        mk.setStyle(d ? { fillColor: '#9aa59f', fillOpacity: 0.7 } : { fillColor: wk(p.kind)[2], fillOpacity: 0.95 });
+        mk.setTooltipContent(d ? `✓ ${p.name}` : p.name);
+    });
     const pos = carPos();
     if (!pos) return;
     if (!W.marker) {

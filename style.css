@@ -252,3 +252,8 @@ a { color: var(--green); }
 /* Telugu text needs a little more line height; the live page's language switch */
 :lang(te) .now-text, :lang(te) .place-note p { line-height: 1.75; }
 .lang-mini { font-size: 14px; padding: 6px 8px; border-radius: 10px; border: 1px solid var(--line); background: var(--card, #fff); color: inherit; }
+
+/* Stops already passed or heard */
+.place.done { background: #f4f6f4; }
+.place.done .place-icon { filter: grayscale(0.7); opacity: 0.75; }
+.place.done .place-sub { color: var(--green); font-weight: 600; }
