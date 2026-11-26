@@ -134,7 +134,16 @@ async function pushTrip(t) {
     const rows = t.places.map(placeToRow);
     const CH = 80;
     for (let i = 0; i === 0 || i < rows.length; i += CH) {
-        await apiPost('saveTrip', { trip: tripToRow(t), places: rows.slice(i, i + CH), replace: i === 0 });
+        // The first piece replaces the trip's rows, so a piece that fails must be retried or the sheet is left short
+        for (let tries = 1; ; tries++) {
+            try {
+                await apiPost('saveTrip', { trip: tripToRow(t), places: rows.slice(i, i + CH), replace: i === 0 });
+                break;
+            } catch (e) {
+                if (tries >= 4) throw e;
+                await new Promise((res) => setTimeout(res, 3000 * tries));
+            }
+        }
     }
     t.synced = true;
     saveLocal();
