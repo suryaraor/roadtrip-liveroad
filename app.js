@@ -633,7 +633,10 @@ function renderDrive() {
     const m = drawMap('driveMap', D.route.coords, t.places);
     if (m) m._line.setStyle({ opacity: 0.45, dashArray: '8 8' }); // road still ahead
     if (m && D.pos) placeMarker();
+    MapView.fitted = '';
     renderDriveStatus();
+    // drawMap fits the whole road a moment later; put the chosen view back after it
+    setTimeout(() => { MapView.fitted = ''; renderDriveStatus(); }, 150);
     renderStartBtn();
 }
 
@@ -684,7 +687,9 @@ function renderDriveStatus() {
         pl.appendChild(r);
     });
     drawProgress();
-    renderNextBar(included(), D.mile, isDone, kindInfo);
+    const nextStop = renderNextBar(included(), D.mile, isDone, kindInfo);
+    const m = S.maps.driveMap;
+    if (m && m._line) MapView.apply(m, D.pos || (D.mile > 0 ? pointAt(D.route, D.mile * M_PER_MI) : null), nextStop, m._line.getBounds());
 }
 
 function isDone(p) { return D.done.has(p.id) || p.mile < D.mile - 1; }
@@ -714,7 +719,6 @@ function placeMarker() {
         D.marker = L.circleMarker(D.pos, { radius: 9, color: '#fff', weight: 3, fillColor: '#e07a1f', fillOpacity: 1 }).addTo(m);
     }
     D.marker.setLatLng(D.pos);
-    if (D.running) m.panTo(D.pos, { animate: true });
 }
 
 async function startDrive(demo) {

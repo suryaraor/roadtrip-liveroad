@@ -272,3 +272,8 @@ a { color: var(--green); }
 .next-track { height: 6px; background: var(--line); border-radius: 999px; overflow: hidden; }
 .next-fill { display: block; height: 100%; width: 0; background: var(--kind); border-radius: 999px; transition: width 0.4s; }
 @media (max-width: 520px) { .next-bar { margin: 4px 16px 8px; } .next-name { white-space: normal; } }
+
+/* Map view switch: next stop / whole trip */
+.map-view-btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 11px; border: 2px solid rgba(0,0,0,0.2); border-radius: 10px; background: var(--card); color: var(--ink); font: 600 13px/1 inherit; font-family: inherit; cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,0.15); }
+.map-view-btn:hover { background: var(--green-soft); }
+.map-view-btn .ic { width: 16px; height: 16px; }

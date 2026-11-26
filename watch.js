@@ -138,8 +138,8 @@ function render() {
         $('nowName').textContent = status === 'done' ? T('wFinished') : status === 'active' && fresh ? T('onRoad') : status === 'active' ? T('wParked') : T('wWaiting');
     }
 
-    drawWatchMap();
-    renderNextBar(W.places, m, wDone, (kd) => { const x = wk(kd); return { icon: x[1], color: x[2], one: x[0] }; });
+    const nextStop = renderNextBar(W.places, m, wDone, (kd) => { const x = wk(kd); return { icon: x[1], color: x[2], one: x[0] }; });
+    drawWatchMap(nextStop);
     const up = $('upNext');
     up.innerHTML = '';
     const next = W.places.filter((p) => !wDone(p)).slice(0, 6);
@@ -187,7 +187,7 @@ function wRow(p, sub, withNote) {
     return row;
 }
 
-function drawWatchMap() {
+function drawWatchMap(nextStop) {
     if (typeof L === 'undefined' || !W.route) return;
     if (!W.map) {
         W.map = L.map('driveMap', { zoomControl: true });
@@ -202,9 +202,9 @@ function drawWatchMap() {
                 color: '#fff', weight: 1.5, fillColor: wk(p.kind)[2], fillOpacity: 0.95
             }).bindTooltip(p.name).addTo(W.map);
         });
-        W.map.fitBounds(line.getBounds(), { padding: [16, 16] });
-        W.follow = true;
-        W.map.on('dragstart', () => { W.follow = false; });
+        W.routeBounds = line.getBounds();
+        W.map.fitBounds(W.routeBounds, { padding: [16, 16] });
+        MapView.fitted = '';
     }
     W.doneLine.setLatLngs(routeUpTo(W.route, carMile() * M_PER_MI));
     W.places.forEach((p) => {
@@ -217,12 +217,9 @@ function drawWatchMap() {
     });
     const pos = carPos();
     if (!pos) return;
-    if (!W.marker) {
-        W.marker = L.circleMarker(pos, { radius: 9, color: '#fff', weight: 3, fillColor: '#e07a1f', fillOpacity: 1 }).addTo(W.map);
-        if (carMile() > 0) W.map.setView(pos, 10);
-    }
+    if (!W.marker) W.marker = L.circleMarker(pos, { radius: 9, color: '#fff', weight: 3, fillColor: '#e07a1f', fillOpacity: 1 }).addTo(W.map);
     W.marker.setLatLng(pos);
-    if (W.follow && carMile() > 0) W.map.panTo(pos, { animate: true });
+    MapView.apply(W.map, carMile() > 0 ? pos : null, nextStop, W.routeBounds);
 }
 
 // What is the car's guide talking about right now?

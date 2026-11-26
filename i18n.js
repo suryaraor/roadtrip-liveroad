@@ -16,7 +16,7 @@ const STR = {
         start: 'Start the trip', cont: 'Continue the trip', stop: 'Stop', demo: 'Demo drive (no GPS)',
         screenHint: 'Keep this screen on and the phone plugged in: phones pause web pages when the screen is off.',
         noSound: 'No sound? Tap to check', upNext: 'Up next', heard: 'Done', heardOne: 'heard', passed: 'passed', rerouting: 'We left the planned road. Finding the road from here...', rerouted: 'New road from here to {c}: {m} miles. Stops updated.', rerouteFail: "Couldn't plan the new road yet; will try again", newStops: 'Added {n} new stops on this road ({k} towns and cities).', share: 'Share the live drive',
-        nextStop: 'Next stop', miLeft: '{m} mi to go',
+        nextStop: 'Next stop', miLeft: '{m} mi to go', viewAll: 'Whole trip', viewNext: 'Next stop',
         mile: 'Mile {m}', toGo: '{m} mi to {c}', noMore: 'No more stops on this trip.', now: 'right about now',
         inMi: 'in {m} mi', onRoad: 'On the road', done: 'Done', planned: 'Planned', lastSeen: 'Last seen at mile {m}',
         stops: '{n} stops', seeStops: 'See the stops', planBack: 'Plan the drive back', del: 'Delete',
@@ -46,7 +46,7 @@ const STR = {
         screenHint: 'స్క్రీన్ ఆన్‌లో ఉంచండి, ఫోన్ ఛార్జింగ్‌లో పెట్టండి: స్క్రీన్ ఆఫ్ అయితే ఫోన్లు వెబ్ పేజీని ఆపేస్తాయి.',
         noSound: 'శబ్దం రావడం లేదా? ఇక్కడ నొక్కండి', upNext: 'తర్వాత వచ్చేవి', heard: 'పూర్తయినవి', heardOne: 'విన్నాం', passed: 'దాటేశాం', rerouting: 'ప్లాన్ చేసిన రోడ్డు వదిలేశాం. ఇక్కడి నుంచి దారి వెతుకుతున్నాం...', rerouted: 'ఇక్కడి నుంచి {c} కి కొత్త దారి: {m} మైళ్లు. స్టాప్‌లు మార్చాం.', rerouteFail: 'కొత్త దారి ఇంకా దొరకలేదు; మళ్ళీ ప్రయత్నిస్తాం', newStops: 'ఈ దారిలో {n} కొత్త స్టాప్‌లు చేర్చాం ({k} ఊళ్లు, నగరాలు).',
         share: 'లైవ్ డ్రైవ్ షేర్ చేయండి',
-        nextStop: 'తదుపరి ఆగే చోటు', miLeft: 'ఇంకా {m} మైళ్లు',
+        nextStop: 'తదుపరి ఆగే చోటు', miLeft: 'ఇంకా {m} మైళ్లు', viewAll: 'మొత్తం ప్రయాణం', viewNext: 'తదుపరి చోటు',
         mile: 'మైలు {m}', toGo: '{c}కి ఇంకా {m} మైళ్లు', noMore: 'ఈ ప్రయాణంలో ఇంకా ఆగే చోట్లు లేవు.', now: 'ఇప్పుడే',
         inMi: '{m} మైళ్లలో', onRoad: 'రోడ్డు మీద', done: 'పూర్తయింది', planned: 'ప్లాన్ చేశారు',
         lastSeen: 'చివరిసారి మైలు {m} దగ్గర', stops: '{n} చోట్లు', seeStops: 'ఆగే చోట్లు చూడండి',
@@ -136,7 +136,65 @@ function renderNextBar(places, mile, isDone, look) {
     document.getElementById('nextMiles').textContent = left <= 0.3 ? T('now') : T('miLeft', { m: miles(left) });
     document.getElementById('nextFill').style.width = `${(frac * 100).toFixed(1)}%`;
     bar.setAttribute('aria-label', `${T('nextStop')}: ${next.name}, ${document.getElementById('nextMiles').textContent}`);
+    return next;
 }
+
+// Map view switch (button on the map): "next" = zoomed in on the car and the next stop, kept in view as we drive;
+// "all" = the whole trip. Dragging the map pauses the automatic zoom until the button is tapped again.
+const MapView = {
+    mode: (() => { try { return localStorage.getItem('rl_mapview') || 'next'; } catch (e) { return 'next'; } })(),
+    free: false,
+    fitted: '',
+    last: null,
+
+    attach(map) {
+        if (!map || map._viewBtn || typeof L === 'undefined') return;
+        const Ctl = L.Control.extend({
+            options: { position: 'topright' },
+            onAdd: () => {
+                const b = L.DomUtil.create('button', 'map-view-btn');
+                b.type = 'button';
+                L.DomEvent.disableClickPropagation(b);
+                b.onclick = () => {
+                    this.mode = this.mode === 'next' ? 'all' : 'next';
+                    try { localStorage.setItem('rl_mapview', this.mode); } catch (e) { /* private mode */ }
+                    this.free = false;
+                    this.fitted = '';
+                    if (this.last) this.apply(...this.last);
+                    else this.label(b);
+                };
+                return b;
+            }
+        });
+        map._viewBtn = new Ctl().addTo(map).getContainer();
+        map.on('dragstart', () => { this.free = true; this.label(map._viewBtn); });
+        this.label(map._viewBtn);
+    },
+
+    // The button says what a tap will show
+    label(b) {
+        if (!b) return;
+        b.innerHTML = '';
+        const toAll = this.mode === 'next' && !this.free;
+        b.append(icon(toAll ? 'route' : 'navigation'), document.createTextNode(` ${T(toAll ? 'viewAll' : 'viewNext')}`));
+        b.setAttribute('aria-pressed', String(this.mode === 'next'));
+    },
+
+    apply(map, car, next, routeBounds) {
+        if (!map) return;
+        this.last = [map, car, next, routeBounds];
+        this.attach(map);
+        this.label(map._viewBtn);
+        if (this.free) return;
+        if (this.mode === 'next' && car && next) {
+            map.fitBounds(L.latLngBounds([car, [next.lat, next.lng]]), { padding: [44, 44], maxZoom: 14, animate: this.fitted === 'next' });
+            this.fitted = 'next';
+        } else if (routeBounds && this.fitted !== 'all') {
+            map.fitBounds(routeBounds, { padding: [16, 16] });
+            this.fitted = 'all';
+        }
+    }
+};
 async function loadTeluguNotes(base) {
     const get = async (f) => {
         const r = await fetch(`${base || ''}${f}?t=${Math.floor(Date.now() / 60000)}`, { cache: 'no-store' });
