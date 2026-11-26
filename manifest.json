@@ -1,0 +1,8 @@
+{
+    "name": "Roadtrip LiveRoad",
+    "short_name": "LiveRoad",
+    "start_url": "./",
+    "display": "standalone",
+    "background_color": "#e4e1d8",
+    "theme_color": "#1f5f45"
+}
