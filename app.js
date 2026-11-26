@@ -253,7 +253,7 @@ function placeRow(p, opts) {
         const d = el('details', 'place-note');
         const te = LANG === 'te' && NOTES_TE[p.id];
         d.appendChild(el('summary', '', te ? 'గైడ్ ఏమంటాడు' : p.note ? 'What the guide says' : 'Wikipedia'));
-        d.appendChild(el('p', '', te || p.note || p.summary));
+        d.appendChild(el('p', '', te || NOTES_EN[p.id] || p.note || p.summary));
         info.appendChild(d);
     }
     row.append(dot, info);

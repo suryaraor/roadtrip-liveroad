@@ -103,11 +103,22 @@ function kindName(kind, english) {
     return LANG === 'te' ? (KIND_TE[kind] || KIND_TE.attraction) : english;
 }
 
+// Guide notes published with the site: Telugu for every stop, plus English notes that were researched
+// further on the road (they replace the sheet's note). Re-read every 5 minutes, so an open page picks up
+// newly enriched notes without a reload.
+let NOTES_EN = {};
 async function loadTeluguNotes(base) {
-    try {
-        const r = await fetch(`${base || ''}notes-te.json?v=1`);
-        if (r.ok) NOTES_TE = await r.json();
-    } catch (e) { /* offline: the Telugu template still works */ }
+    const get = async (f) => {
+        const r = await fetch(`${base || ''}${f}?t=${Math.floor(Date.now() / 60000)}`, { cache: 'no-store' });
+        return r.ok ? r.json() : null;
+    };
+    try { NOTES_TE = (await get('notes-te.json')) || NOTES_TE; } catch (e) { /* offline: the Telugu template still works */ }
+    try { NOTES_EN = (await get('notes-en.json')) || NOTES_EN; } catch (e) { /* none yet */ }
+    if (!loadTeluguNotes.timer) {
+        loadTeluguNotes.timer = setInterval(() => {
+            if (document.visibilityState === 'visible') loadTeluguNotes(base);
+        }, 5 * 60000);
+    }
 }
 
 const TE_OPEN = {
@@ -134,7 +145,7 @@ function teluguTemplate(p) {
 
 // What the guide says for a stop, in the chosen language: { text, lang }
 function noteFor(p) {
-    const en = p.note || (typeof templateNote === 'function' ? templateNote(p) : p.name);
+    const en = NOTES_EN[p.id] || p.note || (typeof templateNote === 'function' ? templateNote(p) : p.name);
     if (LANG !== 'te') return { text: en, lang: 'en', en };
     return { text: NOTES_TE[p.id] || teluguTemplate(p), lang: 'te', en };
 }
