@@ -682,7 +682,7 @@ async function startDrive(demo) {
     Voice.unlock();
     D.running = true;
     D.demo = !!demo;
-    if (t.status !== 'active') {
+    if (!demo && t.status !== 'active') {
         t.status = 'active';
         t.startedAt = new Date().toISOString();
         saveLocal();
@@ -744,6 +744,13 @@ function stopDrive() {
     $('gpsBadge').textContent = 'GPS off';
     $('gpsBadge').className = 'badge';
     if (!D.demo) pushProgress({});
+    else {
+        // Back to where the real trip stands
+        D.mile = D.trip.lastMile || 0;
+        D.lastIdx = null;
+        D.done = new Set(D.trip.places.filter((p) => p.playedAt).map((p) => p.id));
+        renderDriveStatus();
+    }
     renderStartBtn();
 }
 
@@ -826,6 +833,7 @@ function showNow(p, text) {
 
 function markPlayed(p) {
     D.done.add(p.id);
+    if (D.demo) return; // a demo drive doesn't count as hearing it
     p.playedAt = new Date().toISOString();
     D.playedSince.push(p.id);
     saveLocal();
@@ -846,9 +854,11 @@ function pushProgress(extra) {
 function finishTrip() {
     const t = D.trip;
     D.finishing = true;
-    t.status = 'done';
-    saveLocal();
-    if (!D.demo) pushProgress({ status: 'done' });
+    if (!D.demo) {
+        t.status = 'done';
+        saveLocal();
+        pushProgress({ status: 'done' });
+    }
     const bye = `And that's a wrap! Welcome to ${shortName(t.end.label)}. ${Math.round(t.miles)} miles, ${D.done.size} stories, ` +
         `and hopefully a few smiles. Thanks for riding with me. Stretch those legs, you earned it!`;
     const after = () => { D.finishing = false; stopDrive(); };
