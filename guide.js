@@ -2,6 +2,72 @@
 // sentence (some phones cut off long utterances). Also writes a backup note from Wikipedia when the sheet
 // has no Claude key or the phone is offline.
 
+// While the guide talks, ask the phone to quiet other audio (music, podcasts) and give it back afterwards.
+// A web page cannot control other apps directly, so this plays a short, silent, looping clip: the phone
+// treats it as a brief interruption, lowers or pauses the other app, and restores it when the clip stops.
+// iPhone (Safari 16.4+) also gets the Audio Session hint 'transient-solo' = pause others, resume after.
+const Focus = {
+    el: null,
+    held: false,
+    releaseTimer: null,
+    on: (() => { try { return localStorage.getItem('rt_duck') !== 'off'; } catch (e) { return true; } })(),
+
+    silentWav() {
+        const rate = 8000, n = rate / 2;                     // half a second: short clips get "transient" focus
+        const buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf);
+        const str = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+        str(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); str(8, 'WAVE'); str(12, 'fmt ');
+        v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+        v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+        str(36, 'data'); v.setUint32(40, n * 2, true);
+        return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
+    },
+
+    // Must run inside a tap so the phone allows the clip to play later on its own
+    prime() {
+        if (this.el) return;
+        try {
+            const a = new Audio(this.silentWav());
+            a.loop = true;
+            a.setAttribute('playsinline', '');
+            this.el = a;
+            const p = a.play();
+            if (p && p.then) p.then(() => { if (!this.held) a.pause(); }).catch(() => {});
+            else if (!this.held) a.pause();
+        } catch (e) { this.el = null; }
+    },
+
+    session(type) {
+        try { if (navigator.audioSession) navigator.audioSession.type = type; } catch (e) { /* not supported */ }
+    },
+
+    take() {
+        clearTimeout(this.releaseTimer);
+        if (!this.on || this.held) return;
+        this.held = true;
+        this.session('transient-solo');
+        if (this.el) { try { const p = this.el.play(); if (p && p.catch) p.catch(() => {}); } catch (e) { /* ignore */ } }
+    },
+
+    // A short wait so back-to-back notes don't make the music jump up and down between them
+    release(now) {
+        clearTimeout(this.releaseTimer);
+        const go = () => {
+            if (!this.held) return;
+            this.held = false;
+            if (this.el) { try { this.el.pause(); this.el.currentTime = 0; } catch (e) { /* ignore */ } }
+            this.session('auto');
+        };
+        if (now) go(); else this.releaseTimer = setTimeout(go, 1500);
+    },
+
+    set(on) {
+        this.on = !!on;
+        try { localStorage.setItem('rt_duck', on ? 'on' : 'off'); } catch (e) { /* private mode */ }
+        if (!on) this.release(true);
+    }
+};
+
 const Voice = {
     voice: null,
     rate: 1.0,
@@ -34,6 +100,7 @@ const Voice = {
         if (!('speechSynthesis' in window)) return false;
         this.pick();
         try { speechSynthesis.resume(); } catch (e) { /* older browsers */ }
+        Focus.prime();
         return true;
     },
 
@@ -47,8 +114,9 @@ const Voice = {
     },
 
     speak(text, onEnd, lang) {
-        const finish = () => { if (onEnd) setTimeout(onEnd, 0); };
+        const finish = () => { Focus.release(); if (onEnd) setTimeout(onEnd, 0); };
         if (!('speechSynthesis' in window) || this.muted) { finish(); return; }
+        Focus.take();
         const synth = speechSynthesis;
         const id = ++this.session;
         clearTimeout(this.watchdog);
@@ -93,6 +161,7 @@ const Voice = {
         this.speaking = false;
         clearTimeout(this.watchdog);
         if ('speechSynthesis' in window) speechSynthesis.cancel();
+        Focus.release();
     },
 
     // For the "No sound?" check
@@ -165,3 +234,6 @@ function templateNote(p) {
     const close = pickFor(p.id, CLOSERS, 'c');
     return [open, body, quip, close].filter(Boolean).join(' ');
 }
+
+// Any tap on the page (Start, Skip, the map...) is enough to let the quiet-the-music clip play later
+['pointerdown', 'touchend', 'click'].forEach((ev) => document.addEventListener(ev, () => Focus.prime(), { once: true, capture: true, passive: true }));
