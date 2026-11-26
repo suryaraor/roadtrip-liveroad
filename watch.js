@@ -39,8 +39,19 @@ async function loadAll() {
     if (!W.route) W.route = routeFromCoords(decodePolyline(String(row['Route'] || '')));
 }
 
+// One request at a time. A failure retries fast (5, 10, 20 s...) and only says "offline" after three in a row.
+// The watchdog below restarts the loop if the phone froze the page's timers while the screen was off.
 async function poll() {
+    if (W.busy) return;
+    W.busy = true;
+    clearTimeout(W.timer);
+    let ok = false;
     try {
+        // In fallback mode, look again for the fast "live" action every 5 minutes (it appears once the script is redeployed)
+        if (W.full && Date.now() - (W.lastProbe || 0) > 5 * 60000) {
+            W.lastProbe = Date.now();
+            try { await api({ action: 'live', tripId: W.id }); W.full = false; } catch (e) { /* still the old script */ }
+        }
         if (W.full) await loadAll();
         else {
             try {
@@ -50,18 +61,30 @@ async function poll() {
             } catch (e) {
                 if (!/Unknown action/.test(e.message)) throw e;
                 W.full = true;  // older sheet script: fall back to the full read
+                W.lastProbe = Date.now();
                 await loadAll();
             }
         }
-        showError('');
-        render();
-        checkNowPlaying();
+        ok = true;
+        W.fails = 0;
+        W.lastOk = Date.now();
     } catch (e) {
-        $('liveBadge').textContent = 'offline';
-        $('liveBadge').className = 'badge bad';
+        W.fails = (W.fails || 0) + 1;
     }
-    clearTimeout(W.timer);
-    W.timer = setTimeout(poll, W.full ? FULL_POLL_MS : POLL_MS);
+    W.busy = false;
+    try {
+        if (ok) { showError(''); render(); checkNowPlaying(); }
+        else if (W.fails >= 3 || !navigator.onLine) { $('liveBadge').textContent = T('wOffline'); $('liveBadge').className = 'badge bad'; }
+        else { $('liveBadge').textContent = T('wReconnect'); $('liveBadge').className = 'badge warn'; }
+    } catch (e) { /* a drawing problem shouldn't stop the updates */ }
+    const wait = ok ? (W.full ? FULL_POLL_MS : POLL_MS) : Math.min(60000, 5000 * 2 ** (W.fails - 1));
+    W.timer = setTimeout(poll, wait);
+}
+
+function wakeUp() {
+    if (document.visibilityState !== 'visible') return;
+    if ('speechSynthesis' in window) speechSynthesis.resume();
+    if (W.trip) poll();
 }
 
 function placeById(id) { return W.places.find((p) => p.id === id); }
@@ -264,13 +287,22 @@ async function initWatch() {
     };
     $('muteBtn').onclick = () => { Voice.muted = !Voice.muted; if (Voice.muted) Voice.stop(); renderListen(); };
     $('replayBtn').onclick = () => { const p = W.shown && placeById(W.shown); if (p) { Voice.unlock(); speakPlace(p); } };
-    document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') { if ('speechSynthesis' in window) speechSynthesis.resume(); poll(); }
-    });
+    document.addEventListener('visibilitychange', wakeUp);
+    window.addEventListener('pageshow', wakeUp);
+    window.addEventListener('online', () => { W.fails = 0; wakeUp(); });
+    window.addEventListener('focus', () => { if (W.lastOk && Date.now() - W.lastOk > POLL_MS) wakeUp(); });
+    // Watchdog: if no update has landed for a while and nothing is in flight, the timer was lost; start again
+    setInterval(() => {
+        if (!W.trip || W.busy || document.visibilityState !== 'visible') return;
+        const every = W.full ? FULL_POLL_MS : POLL_MS;
+        if (!W.lastOk || Date.now() - W.lastOk > every * 2 + 35000) poll();
+        else render(); // keeps "LIVE · 2 min ago" ticking between updates
+    }, 15000);
 
     await loadTeluguNotes('../');
     try {
         await loadAll();
+        W.lastOk = Date.now();
     } catch (e) {
         showError(/ACCESS_KEY/.test(e.message) ? T('wBadLink') : e.message);
         W.timer = setTimeout(initWatchRetry, 30000);
@@ -284,7 +316,7 @@ async function initWatch() {
 }
 
 async function initWatchRetry() {
-    try { await loadAll(); render(); poll(); } catch (e) { W.timer = setTimeout(initWatchRetry, 30000); }
+    try { await loadAll(); W.lastOk = Date.now(); showError(''); render(); poll(); } catch (e) { W.timer = setTimeout(initWatchRetry, 15000); }
 }
 
 initWatch();

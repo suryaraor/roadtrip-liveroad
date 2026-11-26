@@ -28,7 +28,7 @@ const STR = {
         copied: 'Link copied. Send it to anyone who wants to ride along.',
         // watch page
         wTitle: 'Riding along', wListen: 'Tap to listen along', wListening: 'Listening along',
-        wWaiting: 'Waiting for the car to start...', wSeen: 'Updated {t}', wAgo: '{n} min ago', wJust: 'just now',
+        wWaiting: 'Waiting for the car to start...', wSeen: 'Updated {t}', wAgo: '{n} min ago', wJust: 'just now', wOffline: 'offline', wReconnect: 'reconnecting...',
         wParked: 'The car is not on the road right now.', wFinished: 'They made it! The trip is done.',
         wBadLink: 'This link is missing the trip. Ask the driver to share it again.', wLoading: 'Loading the trip...',
         wOld: 'The guide last spoke about this stop:', wHint: 'Keep this page open to hear the guide at the same time as the car.'
@@ -59,7 +59,7 @@ const STR = {
         copied: 'లింక్ కాపీ అయింది. మీతో పాటు ప్రయాణించాలనుకునే వాళ్లకి పంపండి.',
         wTitle: 'మీతో పాటు ప్రయాణం', wListen: 'వినడానికి ఇక్కడ నొక్కండి', wListening: 'వింటున్నారు',
         wWaiting: 'కారు బయల్దేరడం కోసం ఎదురుచూస్తున్నాం...', wSeen: '{t} అప్‌డేట్ అయింది', wAgo: '{n} నిమిషాల క్రితం',
-        wJust: 'ఇప్పుడే', wParked: 'కారు ఇప్పుడు రోడ్డు మీద లేదు.', wFinished: 'చేరుకున్నారు! ప్రయాణం పూర్తయింది.',
+        wJust: 'ఇప్పుడే', wOffline: 'కనెక్షన్ లేదు', wReconnect: 'మళ్ళీ కలుపుతున్నాం...', wParked: 'కారు ఇప్పుడు రోడ్డు మీద లేదు.', wFinished: 'చేరుకున్నారు! ప్రయాణం పూర్తయింది.',
         wBadLink: 'ఈ లింక్‌లో ట్రిప్ లేదు. డ్రైవర్‌ని మళ్ళీ షేర్ చేయమనండి.', wLoading: 'ట్రిప్ లోడ్ అవుతోంది...',
         wOld: 'గైడ్ చివరిగా మాట్లాడింది ఈ చోటు గురించి:', wHint: 'కారులో ఉన్నవాళ్లతో పాటే గైడ్ మాటలు వినాలంటే ఈ పేజీని తెరిచే ఉంచండి.'
     }

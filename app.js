@@ -701,7 +701,7 @@ async function startDrive(demo) {
     // Speak first, while we're still inside the tap (iPhones refuse speech that starts later)
     Voice.say(hello, LANG, englishOf('hello', hv), () => { if (D.current === intro) D.current = null; pump(); });
     if (LANG === 'te' && !Voice.teVoice) setTimeout(() => showToast(T('noTeVoice')), 1500);
-    if ('wakeLock' in navigator) navigator.wakeLock.request('screen').then((w) => { D.wake = w; }).catch(() => { /* not allowed */ });
+    keepAwake();
     if (demo) {
         D.demoMile = D.mile;
         $('gpsBadge').textContent = 'Demo';
@@ -722,7 +722,38 @@ async function startDrive(demo) {
     } else if ('geolocation' in navigator) {
         $('gpsBadge').textContent = 'Finding GPS...';
         $('gpsBadge').className = 'badge warn';
-        D.watchId = navigator.geolocation.watchPosition(
+        startGps();
+    } else {
+        showError('This browser has no GPS access. Try Chrome or Safari on your phone.');
+    }
+    startHeartbeat();
+}
+
+// Keeps the screen on; the browser drops the lock whenever the page is hidden, so it's re-taken on return
+function keepAwake() {
+    if (!D.running || !('wakeLock' in navigator) || (D.wake && !D.wake.released)) return;
+    navigator.wakeLock.request('screen').then((w) => {
+        D.wake = w;
+        w.addEventListener('release', () => { if (D.wake === w) D.wake = null; });
+    }).catch(() => { /* not allowed */ });
+}
+
+// Every 20 s while driving: tell the sheet we're still here (watchers see "LIVE" even when stopped at a light),
+// and restart GPS if the phone quietly stopped sending fixes (common after the screen was off)
+function startHeartbeat() {
+    clearInterval(D.beat);
+    D.beat = setInterval(() => {
+        if (!D.running) { clearInterval(D.beat); return; }
+        if (!D.demo && Date.now() - D.lastPush > 25000) pushProgress({});
+        if (!D.demo && D.watchId !== null && D.lastFix && Date.now() - D.lastFix > 60000) startGps();
+        keepAwake();
+    }, 20000);
+}
+
+function startGps() {
+    if (D.watchId !== null) navigator.geolocation.clearWatch(D.watchId);
+    D.lastFix = Date.now();
+    D.watchId = navigator.geolocation.watchPosition(
             (pos) => onFix(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy, pos.coords.speed),
             (err) => {
                 $('gpsBadge').textContent = 'GPS blocked';
@@ -733,9 +764,6 @@ async function startDrive(demo) {
             },
             { enableHighAccuracy: true, maximumAge: 5000, timeout: 30000 }
         );
-    } else {
-        showError('This browser has no GPS access. Try Chrome or Safari on your phone.');
-    }
 }
 
 function stopDrive() {
@@ -744,6 +772,7 @@ function stopDrive() {
     D.watchId = null;
     clearInterval(D.demoTimer);
     D.demoTimer = null;
+    clearInterval(D.beat);
     Voice.stop();
     D.current = null;
     D.queue = [];
@@ -766,6 +795,7 @@ function onFix(lat, lng, accuracy, speed) {
     const t = D.trip;
     const p = [lat, lng];
     D.pos = p;
+    D.lastFix = Date.now();
     showError('');
     const badge = $('gpsBadge');
     if (!D.demo) {
@@ -855,10 +885,17 @@ function pushProgress(extra) {
     t.lastMile = D.mile;
     saveLocal();
     const played = D.playedSince.splice(0);
+    // A status/now-playing change that failed to send rides along with the next try
+    const extras = Object.assign({}, D.pendingExtra, extra);
+    D.pendingExtra = null;
     D.lastPush = Date.now();
     const pos = D.pos && !D.demo ? { lat: D.pos[0], lng: D.pos[1] } : {};
-    apiPost('progress', Object.assign({ tripId: t.id, lastMile: D.mile, played }, pos, extra), { keepalive: true })
-        .catch(() => { D.playedSince.push(...played); });
+    apiPost('progress', Object.assign({ tripId: t.id, lastMile: D.mile, played }, pos, extras), { keepalive: true })
+        .catch(() => {
+            D.playedSince.push(...played);
+            D.pendingExtra = Object.assign(extras, D.pendingExtra);
+            D.lastPush = Date.now() - 20000; // retry in ~5-10 s instead of waiting the full 30 s
+        });
 }
 
 function finishTrip() {
@@ -970,12 +1007,19 @@ function init() {
     $('langSelect').onchange = () => { setLang($('langSelect').value); renderTrips(); if (D.trip) renderDrive(); };
     $('shareDrive').onclick = () => { if (D.trip) shareLive(D.trip); };
 
-    document.addEventListener('visibilitychange', async () => {
-        if (document.visibilityState === 'visible' && 'speechSynthesis' in window) speechSynthesis.resume();
-        if (document.visibilityState === 'visible' && D.running && !D.wake && 'wakeLock' in navigator) {
-            try { D.wake = await navigator.wakeLock.request('screen'); } catch (e) { /* ignore */ }
-        }
-    });
+    // Coming back to the app (screen on, tab switched back, signal back): re-take the screen lock, check GPS, and report in now
+    const resume = () => {
+        if (document.visibilityState !== 'visible') return;
+        if ('speechSynthesis' in window) speechSynthesis.resume();
+        if (!D.running) return;
+        keepAwake();
+        if (D.demo) return;
+        if (D.watchId !== null && D.lastFix && Date.now() - D.lastFix > 20000) startGps();
+        pushProgress({});
+    };
+    document.addEventListener('visibilitychange', resume);
+    window.addEventListener('pageshow', resume);
+    window.addEventListener('online', resume);
 
     const lastTrip = safeGet('rl_driveTrip');
     if (lastTrip && tripById(lastTrip)) openDrive(lastTrip);
