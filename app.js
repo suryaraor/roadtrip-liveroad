@@ -60,7 +60,8 @@ function placeToRow(p, i) {
         'Place ID': p.id, 'Order': i + 1, 'Name': p.name, 'Kind': p.kind, 'Mile': Math.round(p.mile * 10) / 10,
         'Off Route Miles': Math.round(p.off * 10) / 10, 'Lat': +p.lat.toFixed(5), 'Lng': +p.lng.toFixed(5),
         'Population': p.population || '', 'Wikipedia': p.wikipedia || '', 'Summary': p.summary || '',
-        'Note': p.note || '', 'Note Source': p.noteSource || '', 'Include': p.include === false ? 'no' : 'yes'
+        'Note': p.note || '', 'Note Source': p.noteSource || '', 'Include': p.include === false ? 'no' : 'yes',
+        'Played At': p.playedAt || '' // kept when the trip is saved again (e.g. after a new road)
     };
 }
 function tripFromRows(r, rows) {
@@ -839,6 +840,7 @@ function onFix(lat, lng, accuracy, speed) {
         D.lastIdx = hit.i;
         D.mile = hit.along / M_PER_MI;
     }
+    checkOffRoute(onRoad, p);
     const placesNow = included();
     placesNow.forEach((pl) => {
         if (D.done.has(pl.id) || D.queue.includes(pl) || (D.current && D.current.id === pl.id)) return;
@@ -942,6 +944,86 @@ function finishTrip() {
 }
 
 // Keep notes for the next stops ready (the sheet writes them with Claude)
+// ---------- New road when the car leaves the planned one ----------
+// Off the planned road for a minute (a different highway, a detour): plan again from where the car is now to the
+// destination, through any planned cities still ahead. The road already driven stays as it was; the stops ahead
+// are moved onto the new road (or dropped if they're no longer near it), and towns along the new road are added.
+function checkOffRoute(onRoad, pos) {
+    if (D.demo || D.rerouting || !D.trip || !D.trip.end || !D.trip.end.lat) return;
+    if (onRoad) { D.offSince = 0; return; }
+    if (!D.offSince) D.offSince = Date.now();
+    if (Date.now() - D.offSince > 60000 && Date.now() - (D.lastReroute || 0) > 180000) reroute(pos);
+}
+
+async function reroute(pos) {
+    const t = D.trip;
+    D.rerouting = true;
+    D.lastReroute = Date.now();
+    showToast(T('rerouting'));
+    try {
+        const dest = [t.end.lat, t.end.lng];
+        const left = haversine(pos, dest);
+        // Planned cities still ahead (closer to the destination than we are by 10+ miles); ones we bypassed are dropped
+        const via = (t.via || []).filter((v) => v.lat && haversine([v.lat, v.lng], dest) < left - 10 * M_PER_MI);
+        const r = await driveRoute([{ lat: pos[0], lng: pos[1] }, ...via, t.end]);
+        const driven = routeUpTo(D.route, D.mile * M_PER_MI);
+        const coords = driven.concat(r.coords);
+        const route = routeFromCoords(coords);
+        const i0 = driven.length;                     // first point of the new road
+        const startMi = route.cum[i0] / M_PER_MI;     // where the car is now, in trip miles
+        const behind = (p) => !!p.playedAt || D.done.has(p.id) || p.mile < D.mile - 0.5;
+        const kept = [];
+        t.places.forEach((p) => {
+            if (behind(p)) { kept.push(p); return; }
+            const hit = nearestOnRoute(route, [p.lat, p.lng], i0, coords.length - 1);
+            const reach = (KIND_RADIUS[p.kind] || 3000) * 1.2;
+            if (hit.off > reach) return;              // no longer near our road
+            kept.push(Object.assign(p, { mile: hit.along / M_PER_MI, off: hit.off / M_PER_MI }));
+        });
+        t.route = packRoute(coords);
+        t.miles = route.cum[route.cum.length - 1] / M_PER_MI;
+        t.hours = Math.min(t.hours || Infinity, t.miles / 62);
+        t.places = kept.sort((a, b) => a.mile - b.mile);
+        t.lastMile = startMi;
+        t.rerouted = new Date().toISOString();
+        D.route = route;
+        D.mile = startMi;
+        D.lastIdx = i0;
+        D.queue = [];
+        D.offSince = 0;
+        saveLocal();
+        renderDrive();
+        pushTrip(t).catch(() => {});
+        pushProgress({});
+        showToast(T('rerouted', { c: shortName(t.end.label), m: miles(t.miles - startMi) }));
+        addPlacesOnNewRoad(t, r.coords, startMi);
+    } catch (e) {
+        showToast(`${T('rerouteFail')} (${e.message})`);
+    } finally {
+        D.rerouting = false;
+    }
+}
+
+// Slower part, in the background: towns, rivers and sights along the new stretch of road
+async function addPlacesOnNewRoad(t, coords, startMi) {
+    try {
+        const found = await placesAlong(routeFromCoords(coords));
+        const have = new Set(t.places.map((p) => p.id));
+        const names = new Set(t.places.map((p) => `${p.kind}:${String(p.name).toLowerCase()}`));
+        const fresh = found.filter((p) => !have.has(p.id) && !names.has(`${p.kind}:${p.name.toLowerCase()}`));
+        if (!fresh.length || D.trip !== t) return;
+        fresh.forEach((p) => { p.mile += startMi; });
+        await addSummaries(fresh);
+        curate(fresh);
+        t.places = t.places.concat(fresh).sort((a, b) => a.mile - b.mile);
+        saveLocal();
+        if (D.trip === t) renderDrive();
+        await pushTrip(t);
+        const towns = fresh.filter((p) => p.include && (p.kind === 'city' || p.kind === 'town')).length;
+        showToast(T('newStops', { n: fresh.filter((p) => p.include).length, k: towns }));
+    } catch (e) { /* the moved stops still work; new ones are a bonus */ }
+}
+
 function prefetchNotes() {
     if (!S.remote || !S.ai || !D.trip.synced) return;
     const ids = included().filter((p) => !p.note && !D.done.has(p.id) && p.mile >= D.mile - 1 && !D.prefetched.has(p.id))
@@ -1053,7 +1135,13 @@ function init() {
     if (lastTrip && tripById(lastTrip)) openDrive(lastTrip);
     setView(fromUrl ? 'plan' : (safeGet('rl_view') || 'trips'));
     sync().then(() => {
-        if (D.trip) D.trip = tripById(D.trip.id) || D.trip;
+        if (D.trip) {
+            const nt = tripById(D.trip.id) || D.trip;
+            // The sheet may hold a newer road (planned again on the way)
+            if (nt.route !== D.trip.route) { D.route = routeFromCoords(decodePolyline(nt.route)); D.lastIdx = null; }
+            D.trip = nt;
+            if (S.view === 'drive') renderDrive();
+        }
         if (S.view === 'trips') renderTrips();
     });
 }

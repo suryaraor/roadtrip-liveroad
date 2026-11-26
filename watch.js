@@ -36,7 +36,14 @@ async function loadAll() {
     W.played = {};
     W.places.forEach((p) => { if (p.playedAt) W.played[p.id] = p.playedAt; });
     W.live = row;
-    if (!W.route) W.route = routeFromCoords(decodePolyline(String(row['Route'] || '')));
+    W.lastFull = Date.now();
+    // The car may have taken a new road: redraw the map for it
+    const rs = String(row['Route'] || '');
+    if (rs !== W.routeStr) {
+        W.routeStr = rs;
+        W.route = routeFromCoords(decodePolyline(rs));
+        if (W.map) { W.map.remove(); W.map = null; W.marker = null; }
+    }
 }
 
 // One request at a time. A failure retries fast (5, 10, 20 s...) and only says "offline" after three in a row.
@@ -52,7 +59,8 @@ async function poll() {
             W.lastProbe = Date.now();
             try { await api({ action: 'live', tripId: W.id }); W.full = false; } catch (e) { /* still the old script */ }
         }
-        if (W.full) await loadAll();
+        // Every 3 minutes the full read too, to pick up a new road and its stops
+        if (W.full || Date.now() - (W.lastFull || 0) > 3 * 60000) await loadAll();
         else {
             try {
                 const res = await api({ action: 'live', tripId: W.id });
