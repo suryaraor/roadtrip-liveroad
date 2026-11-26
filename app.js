@@ -712,6 +712,10 @@ async function startDrive(demo) {
         }, 700);
         const p0 = pointAt(D.route, D.demoMile * M_PER_MI);
         onFix(p0[0], p0[1], 20);
+    } else if (!window.isSecureContext) {
+        $('gpsBadge').textContent = 'GPS blocked';
+        $('gpsBadge').className = 'badge bad';
+        showError('GPS only works on a secure page. Open https://suryarao.in/roadtrip-liveroad/ (with https).');
     } else if ('geolocation' in navigator) {
         $('gpsBadge').textContent = 'Finding GPS...';
         $('gpsBadge').className = 'badge warn';
@@ -721,8 +725,8 @@ async function startDrive(demo) {
                 $('gpsBadge').textContent = 'GPS blocked';
                 $('gpsBadge').className = 'badge bad';
                 showError(err.code === 1
-                    ? 'Location is blocked. Allow location for this site (browser settings > Site settings > Location), then tap Start again.'
-                    : `Can't get your location yet (${err.message}). Keep the screen on; it usually comes back.`);
+                    ? 'Location is blocked. iPhone: Settings > Privacy & Security > Location Services > Safari Websites > While Using, then reload. Android: tap the icon left of the address > Permissions > Location > Allow, and make sure phone Location is on. Then tap Start again.'
+                    : `Can't get your location yet (${err.message}). Make sure Location is on for the phone; outdoors it usually comes back in a moment.`);
             },
             { enableHighAccuracy: true, maximumAge: 5000, timeout: 30000 }
         );
@@ -741,7 +745,7 @@ function stopDrive() {
     D.current = null;
     D.queue = [];
     if (D.wake) { D.wake.release().catch(() => {}); D.wake = null; }
-    $('gpsBadge').textContent = 'GPS off';
+    $('gpsBadge').textContent = 'GPS starts with Start';
     $('gpsBadge').className = 'badge';
     if (!D.demo) pushProgress({});
     else {
@@ -888,6 +892,11 @@ function prefillFromUrl() {
 }
 
 function init() {
+    // Phones only allow GPS on https pages; the custom domain also answers on plain http
+    if (location.protocol === 'http:' && !/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname)) {
+        location.replace(`https://${location.host}${location.pathname}${location.search}${location.hash}`);
+        return;
+    }
     loadLocal();
     try { S.interests = JSON.parse(safeGet('rl_interests') || 'null') || DEFAULT_INTERESTS.slice(); } catch (e) { S.interests = DEFAULT_INTERESTS.slice(); }
     const fromUrl = prefillFromUrl();
