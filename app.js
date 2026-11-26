@@ -435,7 +435,7 @@ async function buildDraft() {
         if (places.missedMiles) showToast(`The map servers skipped about ${Math.round(places.missedMiles)} miles of road. You can rebuild later to fill them in.`);
         setBuild(`Found ${places.length} places. Reading up on them in Wikipedia...`, 0.72);
         await addSummaries(places, (i, n) => setBuild(`Reading Wikipedia (${i} of ${n})...`, 0.72 + 0.25 * (n ? i / n : 1)));
-        places.forEach((p) => { p.include = defaultInclude(p); });
+        curate(places);
         const name = $('tripName').value.trim() || `${shortName(start.label)} → ${shortName(end.label)}`;
         S.draft = {
             id: newId(), name, start, via, end, interests: S.interests.slice(),

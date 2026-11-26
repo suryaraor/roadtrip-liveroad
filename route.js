@@ -312,10 +312,36 @@ async function placesAlong(route, onStep) {
     }
 }
 
-// Which places are ticked by default: every city, town, river and attraction; villages only if notable
+// Which places are ticked by default (everything else stays in the list, unticked):
+// - every city and town; villages that are on Wikipedia or have 400+ people
+// - rivers with a Wikipedia article, once per crossing
+// - sights (museums, history, parks...) with a Wikipedia summary close to the road, at most one per 4 miles,
+//   so the guide isn't talking nonstop through downtowns
+const SIGHT_GAP_MILES = 4;
 function defaultInclude(p) {
-    if (p.kind === 'village') return p.population >= 400 || !!p.wikipedia || !!p.wikidata;
-    return true;
+    if (p.kind === 'city' || p.kind === 'town') return true;
+    if (p.kind === 'village') return p.population >= 400 || !!p.wikipedia;
+    if (p.kind === 'river') return !!p.wikipedia;
+    const maxOff = p.kind === 'nature' || p.kind === 'view' ? 1.5 : 2;
+    return !!p.summary && p.off <= maxOff;
+}
+
+function curate(places) {
+    places.forEach((p) => { p.include = defaultInclude(p); });
+    // One note per river crossing, even when the river is mapped as several pieces
+    const rivers = places.filter((p) => p.kind === 'river' && p.include).sort((a, b) => a.mile - b.mile);
+    rivers.forEach((p, i) => {
+        if (rivers.slice(0, i).some((q) => q.include && q.name === p.name && Math.abs(q.mile - p.mile) < 10)) p.include = false;
+    });
+    // Sights: best first (longer summary, closer to the road, kind), then drop any too close to a better one
+    const sightPrio = { history: 3, museum: 3, attraction: 2, fun: 2, nature: 1, view: 1 };
+    const score = (p) => (sightPrio[p.kind] || 1) * 2 + Math.min(p.summary.length, 800) / 200 - p.off;
+    const kept = [];
+    places.filter((p) => p.include && sightPrio[p.kind]).sort((a, b) => score(b) - score(a)).forEach((p) => {
+        if (kept.some((q) => Math.abs(q.mile - p.mile) < SIGHT_GAP_MILES)) p.include = false;
+        else kept.push(p);
+    });
+    return places;
 }
 
 // ---------- Wikipedia summaries ----------
@@ -340,17 +366,27 @@ async function addSummaries(places, onStep) {
     for (let i = 0; i < withTitle.length; i += 20) {
         onStep && onStep(i, withTitle.length);
         const batch = withTitle.slice(i, i + 20);
+        const base = {
+            action: 'query', prop: 'extracts', exintro: 1, explaintext: 1, exsentences: 5, exlimit: 20,
+            redirects: 1, titles: batch.map((p) => p.wikipedia).join('|'), format: 'json', origin: '*'
+        };
+        if (i) await sleep(400); // Wikipedia throttles fast bursts
         try {
-            const j = await getJSON(`${GEO.wiki}?${new URLSearchParams({
-                action: 'query', prop: 'extracts', exintro: 1, explaintext: 1, exsentences: 5, exlimit: 20,
-                redirects: 1, titles: batch.map((p) => p.wikipedia).join('|'), format: 'json', origin: '*'
-            })}`);
-            const q = j.query || {};
             const map = {};
-            (q.normalized || []).forEach((x) => { map[x.from] = x.to; });
-            (q.redirects || []).forEach((x) => { map[x.from] = x.to; });
             const byTitle = {};
-            Object.values(q.pages || {}).forEach((pg) => { if (pg.extract) byTitle[pg.title] = pg.extract; });
+            // Wikipedia returns only some extracts per call and a "continue" token for the rest
+            let cont = {};
+            for (let round = 0; round < 10; round++) {
+                const url = `${GEO.wiki}?${new URLSearchParams({ ...base, ...cont })}`;
+                let j;
+                try { j = await getJSON(url); } catch (e) { await sleep(3000); j = await getJSON(url); }
+                const q = j.query || {};
+                (q.normalized || []).forEach((x) => { map[x.from] = x.to; });
+                (q.redirects || []).forEach((x) => { map[x.from] = x.to; });
+                Object.values(q.pages || {}).forEach((pg) => { if (pg.extract) byTitle[pg.title] = pg.extract; });
+                if (!j.continue || !j.continue.excontinue) break;
+                cont = j.continue;
+            }
             batch.forEach((p) => {
                 let t = p.wikipedia;
                 for (let hops = 0; map[t] && hops < 3; hops++) t = map[t];
