@@ -20,32 +20,54 @@ const Voice = {
         this.voice = all.find((x) => /en[-_]US/i.test(x.lang)) || all[0] || null;
     },
 
-    // Must first run inside a tap so phones allow audio later
+    keep: [],      // Chrome can garbage-collect a playing utterance and never fire its end event
+    watchdog: null,
+    lastError: '',
+
+    // Phones only allow speech that starts from a tap. Call this from the tap, before any await.
     unlock() {
         if (!('speechSynthesis' in window)) return false;
         this.pick();
-        const u = new SpeechSynthesisUtterance(' ');
-        u.volume = 0;
-        speechSynthesis.speak(u);
+        try { speechSynthesis.resume(); } catch (e) { /* older browsers */ }
         return true;
     },
 
     speak(text, onEnd) {
-        if (!('speechSynthesis' in window) || this.muted) { onEnd && onEnd(); return; }
+        const finish = () => { if (onEnd) setTimeout(onEnd, 0); };
+        if (!('speechSynthesis' in window) || this.muted) { finish(); return; }
+        const synth = speechSynthesis;
         const id = ++this.session;
-        speechSynthesis.cancel();
-        const parts = String(text).match(/[^.!?]+[.!?]+["']?\s*|[^.!?]+$/g) || [String(text)];
+        clearTimeout(this.watchdog);
+        if (synth.speaking || synth.pending) synth.cancel();
+        if (!this.voice) this.pick();
+        const parts = (String(text).match(/[^.!?]+[.!?]+["']?\s*|[^.!?]+$/g) || [String(text)]).map((s) => s.trim()).filter(Boolean);
         let i = 0;
         this.speaking = true;
+        this.keep = [];
         const next = () => {
             if (id !== this.session) return;
-            if (i >= parts.length) { this.speaking = false; onEnd && onEnd(); return; }
-            const u = new SpeechSynthesisUtterance(parts[i++].trim());
+            clearTimeout(this.watchdog);
+            if (i >= parts.length) { this.speaking = false; finish(); return; }
+            const u = new SpeechSynthesisUtterance(parts[i++]);
+            this.keep.push(u);
+            u.lang = (this.voice && this.voice.lang) || 'en-US';
             if (this.voice) u.voice = this.voice;
             u.rate = this.rate;
-            u.onend = next;
-            u.onerror = next;
-            speechSynthesis.speak(u);
+            let moved = false;
+            const done = (ev) => {
+                if (moved) return;
+                moved = true;
+                if (ev && ev.error && ev.error !== 'interrupted' && ev.error !== 'canceled') this.lastError = ev.error;
+                next();
+            };
+            u.onend = done;
+            u.onerror = done;
+            // If the end event never comes, move on after a generous guess at the sentence's length
+            const words = u.text.split(/\s+/).length;
+            this.watchdog = setTimeout(() => { if (id === this.session) done(); }, (words / 2.2 / this.rate) * 1000 + 6000);
+            synth.speak(u);
+            // Chrome sometimes starts the queue paused
+            if (synth.paused) synth.resume();
         };
         next();
     },
@@ -53,7 +75,20 @@ const Voice = {
     stop() {
         this.session++;
         this.speaking = false;
+        clearTimeout(this.watchdog);
         if ('speechSynthesis' in window) speechSynthesis.cancel();
+    },
+
+    // For the "No sound?" check
+    diagnose() {
+        if (!('speechSynthesis' in window)) return 'This browser has no speech engine. Try Chrome (Android) or Safari (iPhone).';
+        const n = speechSynthesis.getVoices().length;
+        const bits = [];
+        if (this.muted) bits.push('The guide is muted in the app (speaker button).');
+        if (!n) bits.push('The phone has not loaded any voices yet.');
+        if (this.lastError) bits.push(`Last speech error: ${this.lastError}.`);
+        bits.push(`Using ${this.voice ? this.voice.name : 'the default voice'} (${n} voices).`);
+        return bits.join(' ');
     }
 };
 if ('speechSynthesis' in window) speechSynthesis.onvoiceschanged = () => Voice.pick();

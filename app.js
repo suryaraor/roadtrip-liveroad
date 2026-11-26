@@ -688,7 +688,6 @@ async function startDrive(demo) {
         saveLocal();
         pushProgress({ status: 'active' });
     }
-    try { if ('wakeLock' in navigator) D.wake = await navigator.wakeLock.request('screen'); } catch (e) { /* not allowed */ }
     renderStartBtn();
     // Anything already behind us when we start is skipped quietly
     D.skipBehind = true;
@@ -698,7 +697,9 @@ async function startDrive(demo) {
     showNow({ name: 'Here we go!', kind: 'intro' }, hello);
     const intro = { id: '_intro' };
     D.current = intro;
+    // Speak first, while we're still inside the tap (iPhones refuse speech that starts later)
     Voice.speak(hello, () => { if (D.current === intro) D.current = null; pump(); });
+    if ('wakeLock' in navigator) navigator.wakeLock.request('screen').then((w) => { D.wake = w; }).catch(() => { /* not allowed */ });
     if (demo) {
         D.demoMile = D.mile;
         $('gpsBadge').textContent = 'Demo';
@@ -929,9 +930,19 @@ function init() {
     Voice.rate = rate;
     $('rateInput').value = rate;
     $('rateInput').oninput = () => { Voice.rate = Number($('rateInput').value); safeSet('rl_rate', String(Voice.rate)); };
+    $('soundCheck').onclick = () => {
+        Voice.muted = false;
+        renderStartBtn();
+        Voice.unlock();
+        Voice.speak('Testing, testing. If you can hear me, the guide is ready to roll.', () => {
+            showToast(`Done. ${Voice.diagnose()} No sound? Turn up the media volume, and on iPhone flip off the silent switch.`);
+        });
+        showToast(`Speaking now... ${Voice.diagnose()}`);
+    };
     $('testVoice').onclick = () => { Voice.unlock(); Voice.speak("Howdy! I'm Miles, your road-trip guide. Buckle up, grab a snack, and let's find some stories."); };
 
     document.addEventListener('visibilitychange', async () => {
+        if (document.visibilityState === 'visible' && 'speechSynthesis' in window) speechSynthesis.resume();
         if (document.visibilityState === 'visible' && D.running && !D.wake && 'wakeLock' in navigator) {
             try { D.wake = await navigator.wakeLock.request('screen'); } catch (e) { /* ignore */ }
         }
